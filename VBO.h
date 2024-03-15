@@ -3,6 +3,13 @@
 
 //#include<glad/glad.h>
 #include <GLEW/glew.h>
+#include<glm/glm.hpp>
+#include<vector>
+
+struct Vertex{
+	glm::vec3 position;
+	glm::vec3 color;
+};
 
 class VBO
 {
@@ -10,7 +17,7 @@ public:
 	// Reference ID of the Vertex Buffer Object
 	GLuint ID;
 	// Constructor that generates a Vertex Buffer Object and links it to vertices
-	VBO(GLfloat* vertices, GLsizeiptr size);
+	VBO(std::vector<Vertex>& vertices);
 
 	// Binds the VBO
 	void Bind();

@@ -26,15 +26,16 @@
 #include "shaderClass.h" 
 #include "VAO.h"
 #include "VBO.h"
-#include "EBO.h"
+//#include "EBO.h"
 #include "Camera.h"
+#include "Cloud.h"
 
 #include "happly.h"
 
 
 const unsigned int width = 1600;
 const unsigned int height = 900;
-
+ 
 
 GLfloat vertices[] =
 { //     COORDINATES     /        COLORS      /
@@ -75,31 +76,29 @@ int main(int, char**)
     std::vector<float> coordy = plyIn.getElement("vertex").getProperty<float>("y");
     std::vector<float> coordz = plyIn.getElement("vertex").getProperty<float>("z");
 
-    const auto [minX, maxX] = std::minmax_element(begin(coordx), end(coordx));
-    const auto [minY, maxY] = std::minmax_element(begin(coordy), end(coordy));
-    const auto [minZ, maxZ] = std::minmax_element(begin(coordz), end(coordz));
+    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmx = std::minmax_element(begin(coordx), end(coordx));
+    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmy = std::minmax_element(begin(coordy), end(coordy));
+    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmz = std::minmax_element(begin(coordz), end(coordz));
 
-    const auto min = std::min({minX, minY, minZ});
-    const auto max = std::min({maxX, maxY, maxZ});
+    float min = std::min({*mmx.first, *mmy.first, *mmz.first});
+    float max = std::max({*mmx.second, *mmy.second, *mmz.second});
 
-    auto range = max - min;
+    float range = max - min;
 
     int n = coordx.size();
 
-    //GLfloat vertices[n*6] = {0.5f};
+    std::vector<Vertex> vertices;
 
-    GLfloat *vertices = (GLfloat *) malloc(n*6*sizeof(GLfloat));
-
+    Vertex vertex;
     for (int i=0; i<n; i++){
-        vertices[i*6+0] = coordx[i];
-        vertices[i*6+1] = coordy[i];
-        vertices[i*6+2] = coordz[i];
-        vertices[i*6+3] = 1.0f;
-        vertices[i*6+4] = 1.0f;
-        vertices[i*6+5] = 1.0f;
+        vertex.position[0] = coordx[i];
+        vertex.position[1] = coordy[i]; 
+        vertex.position[2] = coordz[i];
+        vertex.color[0] = 1.0f; //(coordx[i] - *mmx.first) / (*mmx.second - *mmx.first)/2.0f;
+        vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
+        vertex.color[2] = 1.0f; //(coordz[i] - *mmz.first) / (*mmz.second - *mmz.first)/2.0f;
+        vertices.push_back(vertex);
     }
-
-
 
 
     glfwSetErrorCallback(glfw_error_callback);
@@ -135,7 +134,6 @@ int main(int, char**)
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -154,18 +152,9 @@ int main(int, char**)
 
 
     Shader shaderProgram("default.vert", "default.frag");
-    VAO VAO1;
-    VAO1.Bind();
 
-    VBO VBO1(vertices, n*6*sizeof(GLfloat));
-    EBO EBO1(indices, sizeof(indices));
+    Cloud cloud(vertices);
 
-    VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0);
-    VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-
-    VAO1.Unbind();
-    VBO1.Unbind();
-    EBO1.Unbind();
 
 
     glEnable(GL_DEPTH_TEST);
@@ -181,6 +170,8 @@ int main(int, char**)
     float near = 0.1f;
     float far = 20.0f;
     int pointSize = 5;
+
+
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -198,8 +189,8 @@ int main(int, char**)
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-       // if (show_demo_window)
-        //    ImGui::ShowDemoWindow(&show_demo_window);
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
 
 
         static float f = 0.4f;
@@ -210,7 +201,10 @@ int main(int, char**)
 
             ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
 
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            if (ImGui::GetIO().WantCaptureMouse)
+                ImGui::Text("Focused");      
+            else   
+                ImGui::Text("Not focused");  
             
 
             ImGui::SliderFloat("Near", &near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
@@ -221,11 +215,6 @@ int main(int, char**)
               
 
             if (ImGui::Button("Button")){
-                for (int i=0; i<n; i++){
-                    GLfloat buf = vertices[i*6+0];
-                    vertices[i*6+0] = vertices[i*6+1];
-                    vertices[i*6+1] = buf;
-                }
                 counter++;
             }                           // Buttons return true when clicked (most widgets return true when edited/activated)
                 
@@ -268,20 +257,19 @@ int main(int, char**)
             camera.down();
         }
 
-        camera.Inputs(window);
-        camera.Matrix(45.0f, 0.1f, 100.0f, shaderProgram, "camMatrix");
+        if (!ImGui::GetIO().WantCaptureMouse)
+            camera.Inputs(window);
+        camera.updateMatrix(45.0f, 0.1f, 100.0f);
+        camera.Matrix(shaderProgram, "camMatrix");
 
         glUniform1f(nearUniID, near);
         glUniform1f(farUniID, far);
 
      
-        VAO1.Bind();
         glPointSize(pointSize);
-        glDrawArrays(GL_POINTS, 0, n);
-        //glDrawArrays(GL_TRIANGLES, 0, 3);
-        //glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(int), GL_UNSIGNED_INT, 0);
-        //glDrawElements(GL_POINTS, sizeof(indices)/sizeof(int), GL_UNSIGNED_INT, 0);
-        
+        //glDrawArrays(GL_POINTS, 0, n);
+
+        cloud.Draw(shaderProgram, camera);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -289,9 +277,6 @@ int main(int, char**)
     }
 
     // Cleanup
-    VAO1.Delete();
-    VBO1.Delete();
-    EBO1.Delete();
     shaderProgram.Delete();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

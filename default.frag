@@ -1,7 +1,7 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec3 color;
+uniform vec3 color = vec3(1.0f);
 
 uniform float near = 0.01f;
 uniform float far = 10.0f;
