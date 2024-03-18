@@ -27,6 +27,28 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 {
 	// Exports the camera matrix to the Vertex Shader
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
+
+	GLuint nearUniID = glGetUniformLocation(shader.ID, "near"); 
+	glUniform1f(nearUniID, near);
+
+    GLuint farUniID = glGetUniformLocation(shader.ID, "far"); 
+	glUniform1f(farUniID, far);
+
+	GLuint colorID = glGetUniformLocation(shader.ID, "color");
+	glUniform3fv(colorID, 1, glm::value_ptr(Orientation));
+
+	if (useDepthOnPointsize)
+		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointsize"), 1.0f);
+	else
+		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointsize"), 0.0f);
+	
+	if (useDepthOnPointBrightness)
+		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointBrightness"), 1.0f);
+	else
+		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointBrightness"), 0.0f);
+
+
+
 }
 
 void Camera::forward(){

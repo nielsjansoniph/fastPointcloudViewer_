@@ -24,8 +24,6 @@
 #include <algorithm>
 
 #include "shaderClass.h" 
-#include "VAO.h"
-#include "VBO.h"
 //#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
@@ -36,26 +34,6 @@
 const unsigned int width = 1600;
 const unsigned int height = 900;
  
-
-GLfloat vertices[] =
-{ //     COORDINATES     /        COLORS      /
-	-0.5f, 0.0f,  0.5f,     0.83f, 0.70f, 0.44f,
-	-0.5f, 0.0f, -0.5f,     0.83f, 0.70f, 0.44f,
-	 0.5f, 0.0f, -0.5f,     0.83f, 0.70f, 0.44f,
-	 0.5f, 0.0f,  0.5f,     0.83f, 0.70f, 0.44f,
-	 0.0f, 0.8f,  0.0f,     0.92f, 0.86f, 0.76f,
-};
-
-// Indices for vertices order
-GLuint indices[] =
-{
-	0, 1, 2,
-	0, 2, 3,
-	0, 1, 4,
-	1, 2, 4,
-	2, 3, 4,
-	3, 0, 4
-};
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -68,8 +46,8 @@ int main(int, char**)
 
 
     //happly::PLYData plyIn("C:/Users/n.janson/OneDrive - IPH Hannover gGmbH/Punktwolken/jurgensen_merged_cleaned_Verts.ply");
-    happly::PLYData plyIn("scan_v1+2.ply");
-    //happly::PLYData plyIn("scans.ply");
+    //happly::PLYData plyIn("scan_v1+2.ply");
+    happly::PLYData plyIn("scans.ply");
 
 
     std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
@@ -140,7 +118,7 @@ int main(int, char**)
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Our state
-    bool show_demo_window = true;
+    bool show_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
 
@@ -164,11 +142,6 @@ int main(int, char**)
 
     int keyDelayCounter = 0;
 
-    GLuint nearUniID = glGetUniformLocation(shaderProgram.ID, "near"); 
-    GLuint farUniID = glGetUniformLocation(shaderProgram.ID, "far"); 
-
-    float near = 0.1f;
-    float far = 20.0f;
     int pointSize = 5;
 
 
@@ -194,6 +167,7 @@ int main(int, char**)
 
 
         static float f = 0.4f;
+        static bool useDepthOnSize = true;
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
             
@@ -207,12 +181,15 @@ int main(int, char**)
                 ImGui::Text("Not focused");  
             
 
-            ImGui::SliderFloat("Near", &near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::SliderFloat("Far", &far, 0.0f, 100.0f);
+            ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
             ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
             ImGui::SliderInt("PointSize", &pointSize, 1, 20);
             ImGui::ColorEdit3("BackgroundColor", (float*)&clear_color); // Edit 3 floats representing a color
               
+            ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
+            ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
+
 
             if (ImGui::Button("Button")){
                 counter++;
@@ -262,8 +239,7 @@ int main(int, char**)
         camera.updateMatrix(45.0f, 0.1f, 100.0f);
         camera.Matrix(shaderProgram, "camMatrix");
 
-        glUniform1f(nearUniID, near);
-        glUniform1f(farUniID, far);
+
 
      
         glPointSize(pointSize);

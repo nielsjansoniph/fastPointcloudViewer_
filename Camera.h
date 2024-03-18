@@ -23,6 +23,10 @@ public:
 	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
+	float near = 0.1;
+	float far = 15;
+	bool useDepthOnPointsize = 1;
+	bool useDepthOnPointBrightness = 1;
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;
