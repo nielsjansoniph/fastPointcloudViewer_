@@ -22,13 +22,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
-
+#include "happly.h"
 #include "shaderClass.h" 
 //#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
 
-#include "happly.h"
+
 
 
 const unsigned int width = 1600;

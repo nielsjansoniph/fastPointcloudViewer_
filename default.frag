@@ -23,13 +23,11 @@ void main()
    	float depth = logisticDepth(gl_FragCoord.z);
 	float dBrightness = 1.0-depth*useDepthOnPointBrightness;
 	float dSize = 1.0-depth*useDepthOnPointsize;
-	//if(dot(gl_PointCoord - 0.5, gl_PointCoord - 0.5) > 0.25)
+	
 	if(dot(gl_PointCoord - 0.5, gl_PointCoord - 0.5) > dSize/4.0)
 		discard;
 	else{
-		float z = sqrt(1 - gl_PointCoord.x*gl_PointCoord.x - gl_PointCoord.y*gl_PointCoord.y);
-   		//FragColor = vec4(vec3(-depth+1.0)*(color+1.0)/2.0, 1.0);
+		float z = sqrt(dSize - (gl_PointCoord.x-0.5)*(gl_PointCoord.x-0.5)*4/dSize/dSize - (gl_PointCoord.y-0.5)*(gl_PointCoord.y-0.5)*4/dSize/dSize);
 		FragColor = vec4(vec3(z)*dBrightness, 1.0);
 	}	
-
 }
