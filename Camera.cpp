@@ -34,8 +34,11 @@ void Camera::Matrix(Shader& shader, const char* uniform)
     GLuint farUniID = glGetUniformLocation(shader.ID, "far"); 
 	glUniform1f(farUniID, far);
 
-	GLuint colorID = glGetUniformLocation(shader.ID, "color");
-	glUniform3fv(colorID, 1, glm::value_ptr(Orientation));
+	//GLuint colorID = glGetUniformLocation(shader.ID, "color");
+	//glUniform3fv(colorID, 1, glm::value_ptr(Orientation));
+
+	GLuint camPosID = glGetUniformLocation(shader.ID, "cameraPosition");
+	glUniform3fv(camPosID, 1, glm::value_ptr(Position));
 
 	if (useDepthOnPointsize)
 		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointsize"), 1.0f);
@@ -47,70 +50,35 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 	else
 		glUniform1f(glGetUniformLocation(shader.ID, "useDepthOnPointBrightness"), 0.0f);
 
-
+	if (useShadow)
+		glUniform1f(glGetUniformLocation(shader.ID, "useShadow"), 1.0f);
+	else
+		glUniform1f(glGetUniformLocation(shader.ID, "useShadow"), 0.0f);
 
 }
 
 void Camera::forward(){
-	fc = movementTime;
-	bc = 0;
+	Position += speed * Orientation;
 }
 void Camera::backward(){
-	bc = movementTime;
-	fc = 0;
+	Position += speed * -Orientation;;
 }
 void Camera::left(){
-	lc = movementTime;
-	rc = 0;
+	Position += speed * -glm::normalize(glm::cross(Orientation, Up));
 }
 void Camera::right(){
-	rc = movementTime;
-	bc = 0;
+	Position += speed * glm::normalize(glm::cross(Orientation, Up));
 }
 void Camera::up(){
-	uc = movementTime;
-	dc = 0;
+	Position += speed * Up;
 }
 void Camera::down(){
-	dc = movementTime;
-	uc = 0;
+	Position += speed * -Up;
 }
 
 void Camera::Inputs(GLFWwindow* window)
 {
-	// Handles key inputs
-	if (fc)
-	{	
-		fc--;
-		Position += speed * Orientation;
-	}
-	if (lc)
-	{
-		lc--;
-		Position += speed * -glm::normalize(glm::cross(Orientation, Up));
-	}
-	if (bc)
-	{
-		bc--;
-		Position += speed * -Orientation;
-	}
-	if (rc)
-	{	
-		rc--;
-		Position += speed * glm::normalize(glm::cross(Orientation, Up));
-	}
-	if (uc)
-	{	
-		uc--;
-		Position += speed * Up;
-	}
-	if (dc)
-	{
-		dc--;
-		Position += speed * -Up;
-	}
 
-    
 	// Handles mouse inputs
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 	{

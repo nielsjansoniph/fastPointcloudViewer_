@@ -66,7 +66,6 @@ int main(int, char**)
     int n = coordx.size();
 
     std::vector<Vertex> vertices;
-
     Vertex vertex;
     for (int i=0; i<n; i++){
         vertex.position[0] = coordx[i];
@@ -121,6 +120,8 @@ int main(int, char**)
     bool show_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
+    glm::vec3 point_color = glm::vec3(1.0f);
+    
 
      glfwMakeContextCurrent(window);
     if (glewInit()) {
@@ -129,7 +130,8 @@ int main(int, char**)
     } 
 
 
-    Shader shaderProgram("default.vert", "default.frag");
+    Shader defaultShader("default.vert", "default.frag");
+    Shader monoColorShader("default.vert", "monoColor.frag");
 
     Cloud cloud(vertices);
 
@@ -144,7 +146,8 @@ int main(int, char**)
 
     int pointSize = 5;
 
-
+    int shaderSelection = 0;
+    float cFactor = 1.0;
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -168,6 +171,7 @@ int main(int, char**)
 
         static float f = 0.4f;
         static bool useDepthOnSize = true;
+        
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
             
@@ -185,10 +189,23 @@ int main(int, char**)
             ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
             ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
             ImGui::SliderInt("PointSize", &pointSize, 1, 20);
-            ImGui::ColorEdit3("BackgroundColor", (float*)&clear_color); // Edit 3 floats representing a color
+            ImGui::ColorEdit3("BackgroundCo tlor", (float*)&clear_color); // Edit 3 floats representing a color
               
             ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
             ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
+            ImGui::Checkbox("Use shadow", &camera.useShadow);
+            
+            ImGui::RadioButton("Default shader", &shaderSelection, 0); ImGui::SameLine();
+            ImGui::RadioButton("Monocolor shader", &shaderSelection, 1);
+
+            switch (shaderSelection){
+                case 0:
+                    ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
+                break;
+                case 1:
+                    ImGui::ColorEdit3("Point color", (float*)&point_color);
+                break;
+            }
 
 
             if (ImGui::Button("Button")){
@@ -212,40 +229,63 @@ int main(int, char**)
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        if (shaderSelection==0)
+            defaultShader.Activate();
+        else
+            monoColorShader.Activate();
 
-        shaderProgram.Activate();
-
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_W))
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
             camera.forward();
         
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_A))
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_A))
             camera.left();
 
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_S))
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_S))
             camera.backward();
 
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_D))
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_D))
             camera.right();
 
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_R)){
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_R)){
             camera.up();
         }
-        if (ImGui::IsKeyPressed((ImGuiKey)GLFW_KEY_F)){
+        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
             camera.down();
         }
 
+
         if (!ImGui::GetIO().WantCaptureMouse)
             camera.Inputs(window);
-        camera.updateMatrix(45.0f, 0.1f, 100.0f);
-        camera.Matrix(shaderProgram, "camMatrix");
+        camera.updateMatrix(45.0f, 0.1f, 200.0f);
+        camera.Matrix(defaultShader, "camMatrix");
 
 
-
+        switch (shaderSelection){
+            case 0:{
+                GLuint id = glGetUniformLocation(defaultShader.ID, "cFactor");
+                glUniform1f(id, cFactor);
+                break;
+            }
+            case 1:{
+                GLuint id = glGetUniformLocation(monoColorShader.ID, "color");
+                glUniform3fv(id, 1, glm::value_ptr(point_color));
+                break;
+            }
+        }
      
         glPointSize(pointSize);
         //glDrawArrays(GL_POINTS, 0, n);
 
-        cloud.Draw(shaderProgram, camera);
+
+        switch (shaderSelection){
+            case 0:
+                cloud.Draw(defaultShader, camera);
+            break;
+            case 1:
+                cloud.Draw(monoColorShader, camera);
+            break;
+        }
+
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -253,7 +293,9 @@ int main(int, char**)
     }
 
     // Cleanup
-    shaderProgram.Delete();
+    defaultShader.Delete();
+    monoColorShader.Delete();
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

@@ -1,4 +1,3 @@
-
 #ifndef CLOUD_CLASS_H
 #define CLOUD_CLASS_H
 

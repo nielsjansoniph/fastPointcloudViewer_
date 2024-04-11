@@ -27,6 +27,7 @@ public:
 	float far = 15;
 	bool useDepthOnPointsize = 1;
 	bool useDepthOnPointBrightness = 1;
+	bool useShadow = 1;
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;
@@ -58,15 +59,6 @@ public:
 	// Handles camera inputs
 	void Inputs(GLFWwindow* window);
 
-private:
-    int fc = 0;
-    int bc = 0;
-    int rc = 0;
-    int lc = 0;
-    int uc = 0;
-    int dc = 0;
-
-    int movementTime = 20;
 };
 
 
