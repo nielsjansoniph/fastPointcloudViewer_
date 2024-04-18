@@ -25,9 +25,9 @@ public:
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
 	float near = 0.1;
 	float far = 15;
-	bool useDepthOnPointsize = 1;
-	bool useDepthOnPointBrightness = 1;
-	bool useShadow = 1;
+	bool useDepthOnPointsize = 0;
+	bool useDepthOnPointBrightness = 0;
+	bool useShadow = 0;
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;

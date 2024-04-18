@@ -27,7 +27,7 @@
 //#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
-
+#include <iostream>
 
 
 
@@ -41,13 +41,14 @@ static void glfw_error_callback(int error, const char* description)
 }
 
 // Main code
-int main(int, char**)
-{
-
-
-    //happly::PLYData plyIn("C:/Users/n.janson/OneDrive - IPH Hannover gGmbH/Punktwolken/jurgensen_merged_cleaned_Verts.ply");
-    //happly::PLYData plyIn("scan_v1+2.ply");
-    happly::PLYData plyIn("scans.ply");
+int main(int argc, char * argv[])
+{   
+    std::cout << "Input args: " << std::endl;
+    for (int i=0;i<argc;i++){
+       std::cout << i << " : " << argv[i] << std::endl; 
+    }
+    
+    happly::PLYData plyIn(argv[1]);
 
 
     std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
@@ -132,6 +133,8 @@ int main(int, char**)
 
     Shader defaultShader("default.vert", "default.frag");
     Shader monoColorShader("default.vert", "monoColor.frag");
+    Shader rgbSphereShader("default.vert", "rgbSphere.frag");
+    Shader cubeShader("default.vert", "cube.frag");
 
     Cloud cloud(vertices);
 
@@ -197,6 +200,8 @@ int main(int, char**)
             
             ImGui::RadioButton("Default shader", &shaderSelection, 0); ImGui::SameLine();
             ImGui::RadioButton("Monocolor shader", &shaderSelection, 1);
+            ImGui::RadioButton("RGB sphere shader", &shaderSelection, 2); ImGui::SameLine();
+            ImGui::RadioButton("Cube shader", &shaderSelection, 3); 
 
             switch (shaderSelection){
                 case 0:
@@ -229,10 +234,23 @@ int main(int, char**)
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (shaderSelection==0)
-            defaultShader.Activate();
-        else
-            monoColorShader.Activate();
+        switch (shaderSelection){
+            case 0:{
+                defaultShader.Activate();
+                break;
+            }
+            case 1:{
+                monoColorShader.Activate();
+                break;
+            }
+            case 2:{
+                rgbSphereShader.Activate();
+            }
+            case 3:{
+                cubeShader.Activate();
+            }
+        }
+
 
         if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
             camera.forward();
@@ -284,6 +302,12 @@ int main(int, char**)
             case 1:
                 cloud.Draw(monoColorShader, camera);
             break;
+            case 2:
+                cloud.Draw(rgbSphereShader, camera);
+            break;
+            case 3:
+                cloud.Draw(cubeShader, camera);
+            break;
         }
 
 
@@ -295,6 +319,8 @@ int main(int, char**)
     // Cleanup
     defaultShader.Delete();
     monoColorShader.Delete();
+    rgbSphereShader.Delete();
+    cubeShader.Delete();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
