@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/main.exe",
-            "args": ["iph full.ply", "scans.ply", ],
+            "args": ["E:/scans_hmv2_clean.ply", "scans.ply", ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

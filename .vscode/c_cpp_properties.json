@@ -3,9 +3,9 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/include",
-                "${workspaceFolder}"
+                "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/**",
+                "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/include",
+                "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer",
             ],
             "defines": [
                 "_DEBUG",
@@ -15,7 +15,17 @@
             "compilerPath": "C:\\msys64\\ucrt64\\bin\\gcc.exe",
             "cStandard": "c17",
             "cppStandard": "gnu++17",
-            "intelliSenseMode": "windows-gcc-x64"
+            "intelliSenseMode": "windows-gcc-x64",
+            "compilerPathInCppPropertiesJson": "C:\\msys64\\ucrt64\\bin\\gcc.exe",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/**",
+                    "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/include",
+                    "c:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

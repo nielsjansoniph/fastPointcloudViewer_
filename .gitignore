@@ -7,3 +7,6 @@ halle.ply
 iph full.ply
 scans_.ply
 main-surface-kumpe.exe
+build/*
+!build/debug
+.vscode

@@ -7,15 +7,14 @@
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder)
 // - Introduction, links and more at the top of imgui.cpp
 
-#define GLEW_BUILD
-#define GLFW_DLL
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
 #define GL_SILENCE_DEPRECATION
-#include <GLEW/glew.h>
+//#include <GLEW/glew.h>
+#include <glad/glad.h>
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include <math.h>
 #include <glm/glm.hpp>
@@ -30,7 +29,6 @@
 #include <iostream>
 
 
-
 const unsigned int width = 1600;
 const unsigned int height = 900;
  
@@ -43,12 +41,14 @@ static void glfw_error_callback(int error, const char* description)
 // Main code
 int main(int argc, char * argv[])
 {   
+
     std::cout << "Input args: " << std::endl;
     for (int i=0;i<argc;i++){
        std::cout << i << " : " << argv[i] << std::endl; 
     }
     
-    happly::PLYData plyIn(argv[1]);
+    //happly::PLYData plyIn(argv[1]);
+    happly::PLYData plyIn("C:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/scans.ply");
 
 
     std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
 
     float range = max - min;
 
-    int n = coordx.size();
+    int n = static_cast<int>(coordx.size());
 
     std::vector<Vertex> vertices;
     Vertex vertex;
@@ -101,7 +101,7 @@ int main(int argc, char * argv[])
     glfwSwapInterval(1); // Enable vsync
 
     // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
+    //IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
@@ -125,16 +125,17 @@ int main(int argc, char * argv[])
     
 
      glfwMakeContextCurrent(window);
-    if (glewInit()) {
+   /*if (glewInit()) {
         printf("failed to initialize OpenGL\n");
         return -1;
-    } 
+    }*/
+    gladLoadGL();
 
 
-    Shader defaultShader("default.vert", "default.frag");
-    Shader monoColorShader("default.vert", "monoColor.frag");
-    Shader rgbSphereShader("default.vert", "rgbSphere.frag");
-    Shader cubeShader("default.vert", "cube.frag");
+    Shader defaultShader("../../default.vert", "../../default.frag");
+    Shader monoColorShader("../../default.vert", "../../monoColor.frag");
+    Shader rgbSphereShader("../../default.vert", "../../rgbSphere.frag");
+    Shader cubeShader("../../default.vert", "../../cube.frag");
 
     Cloud cloud(vertices);
 
@@ -147,7 +148,7 @@ int main(int argc, char * argv[])
 
     int keyDelayCounter = 0;
 
-    int pointSize = 5;
+    float pointSize = 5;
 
     int shaderSelection = 0;
     float cFactor = 1.0;
@@ -191,7 +192,7 @@ int main(int argc, char * argv[])
             ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
             ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
             ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
-            ImGui::SliderInt("PointSize", &pointSize, 1, 20);
+            ImGui::SliderFloat("PointSize", &pointSize, 1, 20);
             ImGui::ColorEdit3("BackgroundCo tlor", (float*)&clear_color); // Edit 3 floats representing a color
               
             ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
