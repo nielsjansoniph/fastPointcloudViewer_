@@ -3,8 +3,9 @@
 
 #include<string>
 
-#include"VAO.h"
-#include"Camera.h"
+#include "VAO.h"
+#include "Camera.h"
+#include "shaderClass.h"
 
 class Cloud
 {
@@ -17,6 +18,10 @@ public:
 	Cloud(std::vector<Vertex>& vertices);
 
 	// Draws the mesh
-	void Draw(Shader& shader, Camera& camera);
+	void Draw(Camera& camera);
+
+	int shaderType = 0;
+	Shader* currentShader;
+	
 };
 #endif

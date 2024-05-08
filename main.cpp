@@ -12,7 +12,6 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
-#define GL_SILENCE_DEPRECATION
 //#include <GLEW/glew.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
@@ -119,7 +118,6 @@ int main(int argc, char * argv[])
 
     // Our state
     bool show_demo_window = false;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
     glm::vec3 point_color = glm::vec3(1.0f);
     
@@ -138,6 +136,8 @@ int main(int argc, char * argv[])
     Shader cubeShader("../../default.vert", "../../cube.frag");
 
     Cloud cloud(vertices);
+    cloud.currentShader = &defaultShader;
+    cloud.shaderType = 0;
 
 
 
@@ -177,80 +177,76 @@ int main(int argc, char * argv[])
         static bool useDepthOnSize = true;
         
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
+        
             
-            static int counter = 0;
+        static int counter = 0;
 
-            ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
+        ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
 
-            if (ImGui::GetIO().WantCaptureMouse)
-                ImGui::Text("Focused");      
-            else   
-                ImGui::Text("Not focused");  
+
+        ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
+        ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
+        ImGui::SliderFloat("PointSize", &pointSize, 1, 20);
+        ImGui::ColorEdit3("BackgroundCo tlor", (float*)&clear_color); // Edit 3 floats representing a color
             
+        ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
+        ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
+        ImGui::Checkbox("Use shadow", &camera.useShadow);
+        
 
-            ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
-            ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
-            ImGui::SliderFloat("PointSize", &pointSize, 1, 20);
-            ImGui::ColorEdit3("BackgroundCo tlor", (float*)&clear_color); // Edit 3 floats representing a color
-              
-            ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
-            ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
-            ImGui::Checkbox("Use shadow", &camera.useShadow);
-            
-            ImGui::RadioButton("Default shader", &shaderSelection, 0); ImGui::SameLine();
-            ImGui::RadioButton("Monocolor shader", &shaderSelection, 1);
-            ImGui::RadioButton("RGB sphere shader", &shaderSelection, 2); ImGui::SameLine();
-            ImGui::RadioButton("Cube shader", &shaderSelection, 3); 
 
-            switch (shaderSelection){
-                case 0:
-                    ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
+        ImGui::RadioButton("Default shader", &cloud.shaderType, 0); ImGui::SameLine();
+        ImGui::RadioButton("Monocolor shader", &cloud.shaderType, 1);
+        ImGui::RadioButton("RGB sphere shader", &cloud.shaderType, 2); ImGui::SameLine();
+        ImGui::RadioButton("Cube shader", &cloud.shaderType, 3); 
+
+
+
+        switch (cloud.shaderType){
+            case 0:{
+                ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
+                cloud.currentShader = &defaultShader;
                 break;
-                case 1:
-                    ImGui::ColorEdit3("Point color", (float*)&point_color);
+            } 
+            case 1:{
+                ImGui::ColorEdit3("Point color", (float*)&point_color);
+                cloud.currentShader = &monoColorShader;
                 break;
             }
-
-
-            if (ImGui::Button("Button")){
-                counter++;
-            }                           // Buttons return true when clicked (most widgets return true when edited/activated)
-                
-            ImGui::SameLine();
-            ImGui::Text("%d Points", n);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            
-            ImGui::End();
+            case 2:{
+                cloud.currentShader = &rgbSphereShader;
+                break;
+            }
+            case 3:{
+                cloud.currentShader = &cubeShader;
+                break;
+            }
         }
+                    // Buttons return true when clicked (most widgets return true when edited/activated)
+            
+        ImGui::SameLine();
+        ImGui::Text("%d Points", n);
+
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        
+        ImGui::End();
+    
 
 
         // Rendering
         ImGui::Render();
+
+
+
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        switch (shaderSelection){
-            case 0:{
-                defaultShader.Activate();
-                break;
-            }
-            case 1:{
-                monoColorShader.Activate();
-                break;
-            }
-            case 2:{
-                rgbSphereShader.Activate();
-            }
-            case 3:{
-                cubeShader.Activate();
-            }
-        }
+
+        cloud.currentShader->Activate();
 
 
         if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
@@ -279,7 +275,7 @@ int main(int argc, char * argv[])
         camera.Matrix(defaultShader, "camMatrix");
 
 
-        switch (shaderSelection){
+        switch (cloud.shaderType){
             case 0:{
                 GLuint id = glGetUniformLocation(defaultShader.ID, "cFactor");
                 glUniform1f(id, cFactor);
@@ -295,21 +291,7 @@ int main(int argc, char * argv[])
         glPointSize(pointSize);
         //glDrawArrays(GL_POINTS, 0, n);
 
-
-        switch (shaderSelection){
-            case 0:
-                cloud.Draw(defaultShader, camera);
-            break;
-            case 1:
-                cloud.Draw(monoColorShader, camera);
-            break;
-            case 2:
-                cloud.Draw(rgbSphereShader, camera);
-            break;
-            case 3:
-                cloud.Draw(cubeShader, camera);
-            break;
-        }
+        cloud.Draw(camera);
 
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

@@ -16,18 +16,19 @@ Cloud::Cloud(std::vector <Vertex>& vertices)
 }
 
 
-void Cloud::Draw(Shader& shader, Camera& camera)
+void Cloud::Draw(Camera& camera)
 {
 	// Bind shader to be able to access uniforms
-	shader.Activate();
+	currentShader->Activate();
+	//shader.Activate();
 	VAO.Bind();
 
 	// Keep track of how many of each type of textures we have
 	
 	// Take care of the camera Matrix
-	glUniform3f(glGetUniformLocation(shader.ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
+	glUniform3f(glGetUniformLocation(currentShader->ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
 	//camera.Matrix(shader, "camMatrix");
-    camera.Matrix(shader, "camMatrix");
+    camera.Matrix(*currentShader, "camMatrix");
 
 	// Draw the actual mesh
 	glDrawArrays(GL_POINTS, 0, vertices.size());
