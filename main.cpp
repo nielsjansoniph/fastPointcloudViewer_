@@ -25,11 +25,13 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
-#include "happly.h"
 #include "shaderClass.h" 
 //#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
+
+#include <pcl/io/ply_io.h>
+#include <pcl/point_types.h>
 
 
 
@@ -50,11 +52,33 @@ int main(int argc, char * argv[])
     for (int i=0;i<argc;i++){
        std::cout << i << " : " << argv[i] << std::endl; 
     }
-    //happly::PLYData plyIn(argv[1]);
-    happly::PLYData plyIn("scans.ply");
 
 
-    std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
+    pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PLYReader Reader;
+    if (Reader.read("scans.ply", *tmp)==-1){
+        PCL_ERROR ("Couldn't open file"); 
+        return (-1);
+    }
+
+    int n = tmp->points.size();
+    std::vector<Vertex> vertices;
+    Vertex vertex;
+
+    for (int i=0; i<n; i++){
+        vertex.position[0] = tmp->points[i].x;
+        vertex.position[1] = tmp->points[i].y;
+        vertex.position[2] = tmp->points[i].z;
+        vertex.color[0] = 1.0f; //(coordx[i] - *mmx.first) / (*mmx.second - *mmx.first)/2.0f;
+        vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
+        vertex.color[2] = 1.0f;
+        vertices.push_back(vertex);
+    }
+
+
+
+
+   /* std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
     std::vector<float> coordy = plyIn.getElement("vertex").getProperty<float>("y");
     std::vector<float> coordz = plyIn.getElement("vertex").getProperty<float>("z");
 
@@ -62,15 +86,9 @@ int main(int argc, char * argv[])
     std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmy = std::minmax_element(begin(coordy), end(coordy));
     std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmz = std::minmax_element(begin(coordz), end(coordz));
 
-    float min = std::min({*mmx.first, *mmy.first, *mmz.first});
-    float max = std::max({*mmx.second, *mmy.second, *mmz.second});
-
-    float range = max - min;
-
     int n = static_cast<int>(coordx.size());
 
-    std::vector<Vertex> vertices;
-    Vertex vertex;
+    
     for (int i=0; i<n; i++){
         vertex.position[0] = coordx[i];
         vertex.position[1] = coordy[i]; 
@@ -79,7 +97,7 @@ int main(int argc, char * argv[])
         vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
         vertex.color[2] = 1.0f; //(coordz[i] - *mmz.first) / (*mmz.second - *mmz.first)/2.0f;
         vertices.push_back(vertex);
-    }
+    }*/
 
 
     glfwSetErrorCallback(glfw_error_callback);
@@ -162,7 +180,7 @@ int main(int argc, char * argv[])
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        ImGui::ShowDemoWindow();
+        //mGui::ShowDemoWindow();
 
 
         static float f = 0.4f;
