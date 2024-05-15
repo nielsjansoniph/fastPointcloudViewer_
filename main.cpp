@@ -8,24 +8,29 @@
 // - Introduction, links and more at the top of imgui.cpp
 
 
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
+//#include "imgui.h"
+#include <iostream>
 #include <stdio.h>
 //#include <GLEW/glew.h>
 #include <glad/glad.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_opengl3_loader.h>
+
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include <math.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
 #include <algorithm>
 #include "happly.h"
 #include "shaderClass.h" 
 //#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
-#include <iostream>
+
 
 
 const unsigned int width = 1600;
@@ -45,9 +50,8 @@ int main(int argc, char * argv[])
     for (int i=0;i<argc;i++){
        std::cout << i << " : " << argv[i] << std::endl; 
     }
-    
     //happly::PLYData plyIn(argv[1]);
-    happly::PLYData plyIn("C:/Users/n.janson/OneDrive - IPH Hannover gGmbH/fastPointcloudViewer/scans.ply");
+    happly::PLYData plyIn("scans.ply");
 
 
     std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
@@ -116,17 +120,12 @@ int main(int argc, char * argv[])
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    // Our state
-    bool show_demo_window = false;
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
     glm::vec3 point_color = glm::vec3(1.0f);
     
 
-     glfwMakeContextCurrent(window);
-   /*if (glewInit()) {
-        printf("failed to initialize OpenGL\n");
-        return -1;
-    }*/
+    glfwMakeContextCurrent(window);
+
     gladLoadGL();
 
 
@@ -140,17 +139,11 @@ int main(int argc, char * argv[])
     cloud.shaderType = 0;
 
 
-
     glEnable(GL_DEPTH_TEST);
 
     Camera camera(width, height, glm::vec3(0.0f, 0.0f, 2.0f));
-    int direction = 0;
-
-    int keyDelayCounter = 0;
 
     float pointSize = 5;
-
-    int shaderSelection = 0;
     float cFactor = 1.0;
 
     // Main loop
@@ -169,8 +162,7 @@ int main(int argc, char * argv[])
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        ImGui::ShowDemoWindow();
 
 
         static float f = 0.4f;
@@ -233,7 +225,6 @@ int main(int argc, char * argv[])
         ImGui::End();
     
 
-
         // Rendering
         ImGui::Render();
 
@@ -272,7 +263,7 @@ int main(int argc, char * argv[])
         if (!ImGui::GetIO().WantCaptureMouse)
             camera.Inputs(window);
         camera.updateMatrix(45.0f, 0.1f, 200.0f);
-        camera.Matrix(defaultShader, "camMatrix");
+        camera.Matrix(*cloud.currentShader, "camMatrix");
 
 
         switch (cloud.shaderType){
@@ -292,10 +283,7 @@ int main(int argc, char * argv[])
         //glDrawArrays(GL_POINTS, 0, n);
 
         cloud.Draw(camera);
-
-
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
         glfwSwapBuffers(window);
     }
 
