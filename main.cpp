@@ -31,6 +31,7 @@
 #include "Cloud.h"
 
 #include <pcl/io/ply_io.h>
+//#include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 
 
@@ -52,53 +53,6 @@ int main(int argc, char * argv[])
     for (int i=0;i<argc;i++){
        std::cout << i << " : " << argv[i] << std::endl; 
     }
-
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PLYReader Reader;
-    if (Reader.read("scans.ply", *tmp)==-1){
-        PCL_ERROR ("Couldn't open file"); 
-        return (-1);
-    }
-
-    int n = tmp->points.size();
-    std::vector<Vertex> vertices;
-    Vertex vertex;
-
-    for (int i=0; i<n; i++){
-        vertex.position[0] = tmp->points[i].x;
-        vertex.position[1] = tmp->points[i].y;
-        vertex.position[2] = tmp->points[i].z;
-        vertex.color[0] = 1.0f; //(coordx[i] - *mmx.first) / (*mmx.second - *mmx.first)/2.0f;
-        vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
-        vertex.color[2] = 1.0f;
-        vertices.push_back(vertex);
-    }
-
-
-
-
-   /* std::vector<float> coordx = plyIn.getElement("vertex").getProperty<float>("x");
-    std::vector<float> coordy = plyIn.getElement("vertex").getProperty<float>("y");
-    std::vector<float> coordz = plyIn.getElement("vertex").getProperty<float>("z");
-
-    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmx = std::minmax_element(begin(coordx), end(coordx));
-    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmy = std::minmax_element(begin(coordy), end(coordy));
-    std::pair<std::vector<float>::iterator, std::vector<float>::iterator> mmz = std::minmax_element(begin(coordz), end(coordz));
-
-    int n = static_cast<int>(coordx.size());
-
-    
-    for (int i=0; i<n; i++){
-        vertex.position[0] = coordx[i];
-        vertex.position[1] = coordy[i]; 
-        vertex.position[2] = coordz[i];
-        vertex.color[0] = 1.0f; //(coordx[i] - *mmx.first) / (*mmx.second - *mmx.first)/2.0f;
-        vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
-        vertex.color[2] = 1.0f; //(coordz[i] - *mmz.first) / (*mmz.second - *mmz.first)/2.0f;
-        vertices.push_back(vertex);
-    }*/
-
 
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
@@ -152,7 +106,10 @@ int main(int argc, char * argv[])
     Shader rgbSphereShader("../../default.vert", "../../rgbSphere.frag");
     Shader cubeShader("../../default.vert", "../../cube.frag");
 
-    Cloud cloud(vertices);
+
+    //Cloud cloud(vertices);
+
+    Cloud cloud("scans.ply");
     cloud.currentShader = &defaultShader;
     cloud.shaderType = 0;
 
@@ -180,14 +137,13 @@ int main(int argc, char * argv[])
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        //mGui::ShowDemoWindow();
+        //ImGui::ShowDemoWindow();
 
 
         static float f = 0.4f;
         static bool useDepthOnSize = true;
         
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        
             
         static int counter = 0;
 
@@ -236,7 +192,7 @@ int main(int argc, char * argv[])
                     // Buttons return true when clicked (most widgets return true when edited/activated)
             
         ImGui::SameLine();
-        ImGui::Text("%d Points", n);
+        ImGui::Text("%d Points", cloud.vertices.size());
 
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         
@@ -301,6 +257,7 @@ int main(int argc, char * argv[])
         //glDrawArrays(GL_POINTS, 0, n);
 
         cloud.Draw(camera);
+
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
     }

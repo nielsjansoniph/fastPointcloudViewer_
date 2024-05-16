@@ -6,6 +6,9 @@
 #include "VAO.h"
 #include "Camera.h"
 #include "shaderClass.h"
+#include <pcl/io/ply_io.h>
+//#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
 
 class Cloud
 {
@@ -16,6 +19,9 @@ public:
 
 	// Initializes the mesh
 	Cloud(std::vector<Vertex>& vertices);
+
+	// Initializes with filename to read
+	Cloud(const std::string filename);
 
 	// Draws the mesh
 	void Draw(Camera& camera);
