@@ -9,6 +9,8 @@
 #include <pcl/io/ply_io.h>
 //#include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 class Cloud
 {
@@ -28,6 +30,10 @@ public:
 
 	int shaderType = 0;
 	Shader* currentShader;
+
+	glm::vec3 point_color = glm::vec3(1.0f);
+
+	std::string filename;
 	
 };
 #endif

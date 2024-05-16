@@ -111,12 +111,17 @@ int main(int argc, char * argv[])
 
     std::vector<Cloud> clouds;
 
-    Cloud cloud("scans.ply");
-    cloud.currentShader = &defaultShader;
-    cloud.shaderType = 0;
-    clouds.push_back(cloud);
+    
+    /*clouds.push_back(Cloud("scans_.ply"));
+    clouds[0].currentShader = &defaultShader;
+    clouds[0].shaderType = 0;*/
 
-    clouds[0].shaderType = 1;
+    /*clouds.push_back(Cloud("scans.ply"));
+    clouds[1].currentShader = &monoColorShader;
+    clouds[1].shaderType = 1;*/
+
+
+    
 
     
 
@@ -132,6 +137,9 @@ int main(int argc, char * argv[])
     while (!glfwWindowShouldClose(window))
     {
 
+        
+
+
         glfwPollEvents();
 
         // Start the Dear ImGui frame
@@ -145,28 +153,37 @@ int main(int argc, char * argv[])
 
         static float f = 0.4f;
         static bool useDepthOnSize = true;
+        static bool loadButtonPressed = false;
+        static char filepath[1024];
     
-
+    
         ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
 
         ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
         ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
         ImGui::SliderFloat("PointSize", &pointSize, 1, 20);
-        ImGui::ColorEdit3("BackgroundCo tlor", (float*)&clear_color); // Edit 3 floats representing a color
+        ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
             
         ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
         ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
         ImGui::Checkbox("Use shadow", &camera.useShadow);
-        
 
-        //for (int i=0; i<clouds.size(); i++){
+        ImGui::InputText("Enter cloud file path", filepath, 1024);
+        loadButtonPressed = ImGui::Button("Load");
+        
+        int i=0;
         for (auto & c : clouds){
+            i++;
+            ImGui::PushID(i);
+            ImGui::Text(c.filename.c_str());
             ImGui::RadioButton("Default shader", &c.shaderType, 0); ImGui::SameLine();
             ImGui::RadioButton("Monocolor shader", &c.shaderType, 1);
             ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
             ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
+            
 
+            
             //Show settings depending on shadertype
             switch (c.shaderType){
                 case 0:{
@@ -175,7 +192,7 @@ int main(int argc, char * argv[])
                     break;
                 } 
                 case 1:{
-                    ImGui::ColorEdit3("Point color", (float*)&point_color);
+                    ImGui::ColorEdit3("Point color", (float*)&c.point_color);
                     c.currentShader = &monoColorShader;
                     break;
                 }
@@ -188,6 +205,8 @@ int main(int argc, char * argv[])
                     break;
                 }
             }
+            ImGui::NewLine();
+            ImGui::PopID();
         }
             
         //ImGui::Text("%d Points", cloud.vertices.size());
@@ -196,6 +215,14 @@ int main(int argc, char * argv[])
         ImGui::End();
         // Rendering
         ImGui::Render();
+
+        if (loadButtonPressed){
+            clouds.push_back(Cloud(filepath));
+            clouds[clouds.size()-1].currentShader = &monoColorShader;
+            clouds[clouds.size()-1].shaderType = 1;
+            loadButtonPressed = false;
+        }
+
 
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -248,7 +275,7 @@ int main(int argc, char * argv[])
                 }
                 case 1:{
                     GLuint id = glGetUniformLocation(monoColorShader.ID, "color");
-                    glUniform3fv(id, 1, glm::value_ptr(point_color));
+                    glUniform3fv(id, 1, glm::value_ptr(c.point_color));
                     break;
                 }
             }

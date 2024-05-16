@@ -17,9 +17,10 @@ Cloud::Cloud(std::vector <Vertex>& vertices)
 
 Cloud::Cloud(const std::string filename){
 	pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
+	Cloud::filename = filename;
     pcl::PLYReader Reader;
-    if (Reader.read("scans.ply", *tmp)==-1){
-        PCL_ERROR ("Couldn't open file"); 
+    if (Reader.read(filename, *tmp)==-1){
+        PCL_ERROR ("Couldn't open file :("); 
     }
 
 	int n = tmp->points.size();
