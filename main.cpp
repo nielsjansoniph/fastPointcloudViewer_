@@ -66,7 +66,7 @@ int main(int argc, char * argv[])
 
 
     // Create window with graphics context
-    GLFWwindow* window = glfwCreateWindow(width, height, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height, "Fast first person point cloud viewer", nullptr, nullptr);
     if (window == nullptr){
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();
@@ -109,9 +109,16 @@ int main(int argc, char * argv[])
 
     //Cloud cloud(vertices);
 
+    std::vector<Cloud> clouds;
+
     Cloud cloud("scans.ply");
     cloud.currentShader = &defaultShader;
     cloud.shaderType = 0;
+    clouds.push_back(cloud);
+
+    clouds[0].shaderType = 1;
+
+    
 
 
     glEnable(GL_DEPTH_TEST);
@@ -124,11 +131,7 @@ int main(int argc, char * argv[])
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+
         glfwPollEvents();
 
         // Start the Dear ImGui frame
@@ -142,13 +145,9 @@ int main(int argc, char * argv[])
 
         static float f = 0.4f;
         static bool useDepthOnSize = true;
-        
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-            
-        static int counter = 0;
+    
 
         ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
-
 
         ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
@@ -161,106 +160,108 @@ int main(int argc, char * argv[])
         ImGui::Checkbox("Use shadow", &camera.useShadow);
         
 
+        //for (int i=0; i<clouds.size(); i++){
+        for (auto & c : clouds){
+            ImGui::RadioButton("Default shader", &c.shaderType, 0); ImGui::SameLine();
+            ImGui::RadioButton("Monocolor shader", &c.shaderType, 1);
+            ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
+            ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
 
-        ImGui::RadioButton("Default shader", &cloud.shaderType, 0); ImGui::SameLine();
-        ImGui::RadioButton("Monocolor shader", &cloud.shaderType, 1);
-        ImGui::RadioButton("RGB sphere shader", &cloud.shaderType, 2); ImGui::SameLine();
-        ImGui::RadioButton("Cube shader", &cloud.shaderType, 3); 
-
-
-
-        switch (cloud.shaderType){
-            case 0:{
-                ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
-                cloud.currentShader = &defaultShader;
-                break;
-            } 
-            case 1:{
-                ImGui::ColorEdit3("Point color", (float*)&point_color);
-                cloud.currentShader = &monoColorShader;
-                break;
-            }
-            case 2:{
-                cloud.currentShader = &rgbSphereShader;
-                break;
-            }
-            case 3:{
-                cloud.currentShader = &cubeShader;
-                break;
+            //Show settings depending on shadertype
+            switch (c.shaderType){
+                case 0:{
+                    ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
+                    c.currentShader = &defaultShader;
+                    break;
+                } 
+                case 1:{
+                    ImGui::ColorEdit3("Point color", (float*)&point_color);
+                    c.currentShader = &monoColorShader;
+                    break;
+                }
+                case 2:{
+                    c.currentShader = &rgbSphereShader;
+                    break;
+                }
+                case 3:{
+                    c.currentShader = &cubeShader;
+                    break;
+                }
             }
         }
-                    // Buttons return true when clicked (most widgets return true when edited/activated)
             
-        ImGui::SameLine();
-        ImGui::Text("%d Points", cloud.vertices.size());
-
+        //ImGui::Text("%d Points", cloud.vertices.size());
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         
         ImGui::End();
-    
-
         // Rendering
         ImGui::Render();
-
-
 
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glPointSize(pointSize);
 
-
-        cloud.currentShader->Activate();
-
-
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
-            camera.forward();
         
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_A))
-            camera.left();
+        //Keyboard movement handling
+        {
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
+                camera.forward();
+            
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_A))
+                camera.left();
 
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_S))
-            camera.backward();
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_S))
+                camera.backward();
 
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_D))
-            camera.right();
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_D))
+                camera.right();
 
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_R)){
-            camera.up();
-        }
-        if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
-            camera.down();
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_R)){
+                camera.up();
+            }
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
+                camera.down();
+            }
         }
 
 
         if (!ImGui::GetIO().WantCaptureMouse)
             camera.Inputs(window);
         camera.updateMatrix(45.0f, 0.1f, 200.0f);
-        camera.Matrix(*cloud.currentShader, "camMatrix");
 
 
-        switch (cloud.shaderType){
-            case 0:{
-                GLuint id = glGetUniformLocation(defaultShader.ID, "cFactor");
-                glUniform1f(id, cFactor);
-                break;
+        //for (int i=0; i<clouds.size(); i++){
+        for (auto & c : clouds){
+
+            c.currentShader->Activate();
+
+            camera.Matrix(*c.currentShader, "camMatrix");
+
+            switch (c.shaderType){
+                case 0:{
+                    GLuint id = glGetUniformLocation(defaultShader.ID, "cFactor");
+                    glUniform1f(id, cFactor);
+                    break;
+                }
+                case 1:{
+                    GLuint id = glGetUniformLocation(monoColorShader.ID, "color");
+                    glUniform3fv(id, 1, glm::value_ptr(point_color));
+                    break;
+                }
             }
-            case 1:{
-                GLuint id = glGetUniformLocation(monoColorShader.ID, "color");
-                glUniform3fv(id, 1, glm::value_ptr(point_color));
-                break;
-            }
+        
+            c.Draw(camera);
         }
-     
-        glPointSize(pointSize);
-        //glDrawArrays(GL_POINTS, 0, n);
 
-        cloud.Draw(camera);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
     }
+
+
 
     // Cleanup
     defaultShader.Delete();
