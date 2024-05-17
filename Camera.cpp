@@ -29,12 +29,12 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
 
 	GLuint nearUniID = glGetUniformLocation(shader.ID, "near"); 
-	glUniform1f(nearUniID, near);
+	glUniform1f(nearUniID, nearDist);
 
     GLuint farUniID = glGetUniformLocation(shader.ID, "far"); 
-	glUniform1f(farUniID, far);
+	glUniform1f(farUniID, farDist);
 
-	//GLuint colorID = glGetUniformLocation(shader.ID, "color");
+	GLuint colorID = glGetUniformLocation(shader.ID, "color");
 	//glUniform3fv(colorID, 1, glm::value_ptr(Orientation));
 
 	GLuint camPosID = glGetUniformLocation(shader.ID, "cameraPosition");

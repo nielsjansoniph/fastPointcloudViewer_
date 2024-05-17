@@ -7,7 +7,6 @@
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder)
 // - Introduction, links and more at the top of imgui.cpp
 
-
 //#include "imgui.h"
 #include <iostream>
 #include <stdio.h>
@@ -19,20 +18,16 @@
 #include <imgui_impl_opengl3_loader.h>
 
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
-#include <math.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <algorithm>
 #include "shaderClass.h" 
-//#include "EBO.h"
 #include "Camera.h"
 #include "Cloud.h"
 
-#include <pcl/io/ply_io.h>
-//#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
+//#include <pcl/io/ply_io.h>
+//
+//#include <pcl/point_types.h>
 
 
 
@@ -82,8 +77,6 @@ int main(int argc, char * argv[])
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
-    
-    
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -136,10 +129,6 @@ int main(int argc, char * argv[])
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-
-        
-
-
         glfwPollEvents();
 
         // Start the Dear ImGui frame
@@ -150,19 +139,17 @@ int main(int argc, char * argv[])
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         //ImGui::ShowDemoWindow();
 
-
         static float f = 0.4f;
         static bool useDepthOnSize = true;
         static bool loadButtonPressed = false;
         static char filepath[1024];
     
-    
         ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
 
-        ImGui::SliderFloat("Near", &camera.near, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::SliderFloat("Far", &camera.far, 0.0f, 100.0f);
+        ImGui::SliderFloat("Near", &camera.nearDist, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::SliderFloat("Far", &camera.farDist, 0.0f, 100.0f);
         ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
-        ImGui::SliderFloat("PointSize", &pointSize, 1, 20);
+        
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
             
         ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
@@ -172,17 +159,17 @@ int main(int argc, char * argv[])
         ImGui::InputText("Enter cloud file path", filepath, 1024);
         loadButtonPressed = ImGui::Button("Load");
         
+        //show options for each cloud
         int i=0;
         for (auto & c : clouds){
             i++;
             ImGui::PushID(i);
             ImGui::Text(c.filename.c_str());
+            ImGui::SliderFloat("PointSize", &c.pointssize, 1, 20);
             ImGui::RadioButton("Default shader", &c.shaderType, 0); ImGui::SameLine();
             ImGui::RadioButton("Monocolor shader", &c.shaderType, 1);
             ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
             ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
-            
-
             
             //Show settings depending on shadertype
             switch (c.shaderType){
@@ -216,6 +203,7 @@ int main(int argc, char * argv[])
         // Rendering
         ImGui::Render();
 
+        //add new cloud TODO: catch invalid clouds
         if (loadButtonPressed){
             clouds.push_back(Cloud(filepath));
             clouds[clouds.size()-1].currentShader = &monoColorShader;
@@ -223,17 +211,23 @@ int main(int argc, char * argv[])
             loadButtonPressed = false;
         }
 
-
+        //update window size
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
+        //clear window
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glPointSize(pointSize);
+        //set pointsize
+        
 
         
+        
+
+        //camera rotation and movement update
+        if (!ImGui::GetIO().WantCaptureMouse){
+
         //Keyboard movement handling
-        {
             if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
                 camera.forward();
             
@@ -252,16 +246,14 @@ int main(int argc, char * argv[])
             if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
                 camera.down();
             }
+
+            camera.Inputs(window);
+            camera.updateMatrix(45.0f, 0.1f, 200.0f);
         }
 
-
-        if (!ImGui::GetIO().WantCaptureMouse)
-            camera.Inputs(window);
-        camera.updateMatrix(45.0f, 0.1f, 200.0f);
-
-
-        //for (int i=0; i<clouds.size(); i++){
+        //
         for (auto & c : clouds){
+            glPointSize(c.pointssize);
 
             c.currentShader->Activate();
 

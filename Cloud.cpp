@@ -1,5 +1,6 @@
 #include "Cloud.h"
 
+
 Cloud::Cloud(std::vector <Vertex>& vertices)
 {
 	Cloud::vertices = vertices;
@@ -18,10 +19,22 @@ Cloud::Cloud(std::vector <Vertex>& vertices)
 Cloud::Cloud(const std::string filename){
 	pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
 	Cloud::filename = filename;
-    pcl::PLYReader Reader;
-    if (Reader.read(filename, *tmp)==-1){
-        PCL_ERROR ("Couldn't open file :("); 
-    }
+	
+	std::filesystem::path p(filename);
+	//std::cout << p.extension() << std::endl;
+	if (p.extension().compare(".ply") == 0){
+		pcl::PLYReader Reader;
+		if (Reader.read(filename, *tmp)==-1)
+			42; //TODO
+	}
+		
+	if (p.extension().compare(".pcd") == 0){
+		pcl::PCDReader Reader;
+		if (Reader.read(filename, *tmp) == -1)
+			42; //TODO error handling
+	}
+    
+    
 
 	int n = tmp->points.size();
     std::vector<Vertex> vertices;

@@ -1,16 +1,20 @@
 #ifndef CLOUD_CLASS_H
 #define CLOUD_CLASS_H
 
+
+#include <pcl/io/pcd_io.h>
 #include<string>
 
 #include "VAO.h"
 #include "Camera.h"
 #include "shaderClass.h"
 #include <pcl/io/ply_io.h>
-//#include <pcl/io/pcd_io.h>
+
 #include <pcl/point_types.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <filesystem>
+#include <iostream>
 
 class Cloud
 {
@@ -34,6 +38,8 @@ public:
 	glm::vec3 point_color = glm::vec3(1.0f);
 
 	std::string filename;
+
+	float pointssize = 5;
 	
 };
 #endif

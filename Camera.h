@@ -23,8 +23,8 @@ public:
 	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
-	float near = 0.1f;
-	float far = 15;
+	float nearDist = 0.1f;
+	float farDist = 15;
 	bool useDepthOnPointsize = 0;
 	bool useDepthOnPointBrightness = 0;
 	bool useShadow = 0;
