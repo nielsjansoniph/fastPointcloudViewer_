@@ -25,6 +25,15 @@
 #include "Camera.h"
 #include "Cloud.h"
 
+#include "stb_image.h"
+#include "Texture.h"
+
+#include "Mesh.h"
+#include<filesystem>
+namespace fs = std::filesystem;
+
+
+#include <happly.h>
 //#include <pcl/io/ply_io.h>
 //
 //#include <pcl/point_types.h>
@@ -43,6 +52,9 @@ static void glfw_error_callback(int error, const char* description)
 // Main code
 int main(int argc, char * argv[])
 {   
+
+
+
 
     std::cout << "Input args: " << std::endl;
     for (int i=0;i<argc;i++){
@@ -93,32 +105,70 @@ int main(int argc, char * argv[])
 
     gladLoadGL();
 
+   
 
+    std::cout << "Compiling defaultShader" << std::endl;
     Shader defaultShader("../../default.vert", "../../default.frag");
+    std::cout << "Compiling monoColorShader" << std::endl;
     Shader monoColorShader("../../default.vert", "../../monoColor.frag");
+    std::cout << "Compiling rgbSphereShader" << std::endl;
     Shader rgbSphereShader("../../default.vert", "../../rgbSphere.frag");
+    std::cout << "Compiling cubeShader" << std::endl;
     Shader cubeShader("../../default.vert", "../../cube.frag");
-
-
-    //Cloud cloud(vertices);
+    std::cout << "Compiling meshShader" << std::endl;
+    Shader meshShader("../../mesh.vert", "../../mesh.frag");
 
     std::vector<Cloud> clouds;
-
-    
-    /*clouds.push_back(Cloud("scans_.ply"));
-    clouds[0].currentShader = &defaultShader;
-    clouds[0].shaderType = 0;*/
-
+ 
     /*clouds.push_back(Cloud("scans.ply"));
-    clouds[1].currentShader = &monoColorShader;
-    clouds[1].shaderType = 1;*/
-
-
-    
+    clouds[clouds.size()-1].currentShader = &monoColorShader;
+    clouds[clouds.size()-1].shaderType = 1;*/
 
     
+    
+    happly::PLYData plyIn("bunny.ply");
+    std::vector <std::array<double, 3>> vPos = plyIn.getVertexPositions();
+    std::vector <VertexPosNorCol> verts;
+    for (std::array<double, 3> & row : vPos)
+    {
+        //glm::vec3((float) row[0], (float) row[1], (float) row[2]);
+        verts.push_back(VertexPosNorCol{glm::vec3((float) row[0] / 10.0, (float) row[1] / 10.0, (float) row[2] / 10.0),
+                                        glm::vec3(1.0f, 0.0f, 0.0f), 
+                                        glm::vec2(0.0f, 0.0f)});
+    }
+
+    std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices<size_t>();
+    std::vector <GLuint> inds;
+    for (auto & row : fInd)
+    {
+        inds.push_back((float) row[0]);
+        inds.push_back((float) row[1]);
+        inds.push_back((float) row[2]);
+    } 
+
+    std::vector <VertexPosNorCol> vertices_ = 
+    {
+        VertexPosNorCol{glm::vec3(-0.5f, 0.0f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+        VertexPosNorCol{glm::vec3(-0.5f, 0.0f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(5.0f, 0.0f)},
+        VertexPosNorCol{glm::vec3(0.5f, 0.0f, -0.5f), glm::vec3(0.0, 0.0f, 0.f), glm::vec2(0.0f, 0.0f)},
+        VertexPosNorCol{glm::vec3(0.5f, 0.0f,  0.5f), glm::vec3(0.83f, 0.70f, 0.44f), glm::vec2(5.0f, 0.0f)},
+        VertexPosNorCol{glm::vec3(0.0f, 0.8f,  0.0f), glm::vec3(0.92f, 0.86f, 0.76f), glm::vec2(2.5f, 5.0f)}
+    };
+
+    // Indices for vertices order
+    std::vector <GLuint> indices =
+    {
+        0, 1, 2,
+        0, 2, 3,
+        0, 1, 4,
+        1, 2, 4,
+        2, 3, 4,
+        3, 0, 4
+    };
 
 
+    Mesh pyramid(verts, inds);
+    
     glEnable(GL_DEPTH_TEST);
 
     Camera camera(width, height, glm::vec3(0.0f, 0.0f, 2.0f));
@@ -192,6 +242,7 @@ int main(int argc, char * argv[])
                     break;
                 }
             }
+
             ImGui::NewLine();
             ImGui::PopID();
         }
@@ -251,7 +302,23 @@ int main(int argc, char * argv[])
             camera.updateMatrix(45.0f, 0.1f, 200.0f);
         }
 
-        //
+
+        pyramid.Draw(meshShader, camera);
+
+        /*
+        meshShader.Activate();
+
+        camera.Matrix(meshShader, "camMatrix");
+
+        //glUniform1f(uniID, 0.5f);
+        //popCat.Bind();
+
+        VAO.Bind();
+
+		// Draw primitives, number of indices, datatype of indices, index of indices
+		glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(int), GL_UNSIGNED_INT, 0);
+        */
+
         for (auto & c : clouds){
             glPointSize(c.pointssize);
 
@@ -275,6 +342,9 @@ int main(int argc, char * argv[])
             c.Draw(camera);
         }
 
+
+
+        
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);

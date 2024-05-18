@@ -19,18 +19,19 @@
 class Cloud
 {
 public:
-	std::vector<Vertex> vertices;
+	std::vector<VertexPosCol> vertices;
 	// Store VAO in public so it can be used in the Draw function
 	VAO VAO;
 
 	// Initializes the mesh
-	Cloud(std::vector<Vertex>& vertices);
+	Cloud(std::vector<VertexPosCol>& vertices);
 
 	// Initializes with filename to read
 	Cloud(const std::string filename);
 
 	// Draws the mesh
 	void Draw(Camera& camera);
+	void DrawElements(Camera& camera);
 
 	int shaderType = 0;
 	Shader* currentShader;

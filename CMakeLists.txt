@@ -10,7 +10,7 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 #message("${PCL_LIBRARIES}=" ${PCL_LIBRARIES})
 
-add_executable(fpcv main.cpp shaderClass.cpp Camera.cpp Cloud.cpp VBO.cpp VAO.cpp)
+add_executable(fpcv main.cpp stb.cpp Texture.cpp shaderClass.cpp Camera.cpp Cloud.cpp VBO.cpp VAO.cpp EBO.cpp Mesh.cpp)
 
 
 target_link_libraries(fpcv
