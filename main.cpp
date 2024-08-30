@@ -34,9 +34,20 @@ namespace fs = std::filesystem;
 
 
 #include <happly.h>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 //#include <pcl/io/ply_io.h>
 //
 //#include <pcl/point_types.h>
+
+
+#include <chrono>
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
+#include <numeric>
+#include <vector>
 
 
 
@@ -49,11 +60,10 @@ static void glfw_error_callback(int error, const char* description)
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
+
 // Main code
 int main(int argc, char * argv[])
 {   
-
-
 
 
     std::cout << "Input args: " << std::endl;
@@ -124,57 +134,53 @@ int main(int argc, char * argv[])
     clouds[clouds.size()-1].currentShader = &monoColorShader;
     clouds[clouds.size()-1].shaderType = 1;*/
 
-    
-    
-    happly::PLYData plyIn("bunny.ply");
-    std::vector <std::array<double, 3>> vPos = plyIn.getVertexPositions();
-    std::vector <VertexPosNorCol> verts;
-    for (std::array<double, 3> & row : vPos)
-    {
-        //glm::vec3((float) row[0], (float) row[1], (float) row[2]);
-        verts.push_back(VertexPosNorCol{glm::vec3((float) row[0] / 10.0, (float) row[1] / 10.0, (float) row[2] / 10.0),
-                                        glm::vec3(1.0f, 0.0f, 0.0f), 
-                                        glm::vec2(0.0f, 0.0f)});
+/*
+    Assimp::Importer importer;
+    const aiScene* scene  = importer.ReadFile("C:/Users/n.janson/OneDrive - IPH Hannover gGmbH/Sonstiges/PasteuralleEG.stl", 
+        aiProcess_RemoveComponent       |
+        aiProcess_GenNormals            |
+        aiProcess_Triangulate           |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_SortByPType);
+
+    if (scene == nullptr){
+        std::cout << importer.GetErrorString() << std::endl;
     }
 
-    std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices<size_t>();
-    std::vector <GLuint> inds;
-    for (auto & row : fInd)
-    {
-        inds.push_back((float) row[0]);
-        inds.push_back((float) row[1]);
-        inds.push_back((float) row[2]);
-    } 
 
-    std::vector <VertexPosNorCol> vertices_ = 
-    {
-        VertexPosNorCol{glm::vec3(-0.5f, 0.0f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
-        VertexPosNorCol{glm::vec3(-0.5f, 0.0f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(5.0f, 0.0f)},
-        VertexPosNorCol{glm::vec3(0.5f, 0.0f, -0.5f), glm::vec3(0.0, 0.0f, 0.f), glm::vec2(0.0f, 0.0f)},
-        VertexPosNorCol{glm::vec3(0.5f, 0.0f,  0.5f), glm::vec3(0.83f, 0.70f, 0.44f), glm::vec2(5.0f, 0.0f)},
-        VertexPosNorCol{glm::vec3(0.0f, 0.8f,  0.0f), glm::vec3(0.92f, 0.86f, 0.76f), glm::vec2(2.5f, 5.0f)}
-    };
+    aiMesh* mesh = scene->mMeshes[0];
+    std::vector <VertexPosNorCol> v;
 
-    // Indices for vertices order
-    std::vector <GLuint> indices =
-    {
-        0, 1, 2,
-        0, 2, 3,
-        0, 1, 4,
-        1, 2, 4,
-        2, 3, 4,
-        3, 0, 4
-    };
+    for (unsigned int i = 0; i < mesh->mNumVertices; i++){
+        aiVector3f ptmp = mesh->mVertices[i];
+        glm::vec3 position{ptmp.y/10.0f, ptmp.z/10.0f, ptmp.x/10.0f};
+        //aiColor4D colortmp = mesh->mColors[0][i];
+        //glm::vec3 color{colortmp.r, colortmp.g, colortmp.b};
+        aiVector3f normals = mesh->mNormals[i];
+        glm::vec3 color{(normals.x+1.0f)/2.0f, (normals.y+1.0f)/2.0f, (normals.z+1.0f)/2.0f};
+        //glm::vec3 color{1.0f, 1.0f, 1.0f};
+        glm::vec2 texCoord{0.0f, 0.0f};
+
+        v.push_back(VertexPosNorCol{position, color, texCoord});
+    }
+
+    std::vector <GLuint> f;
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++){
+        aiFace ftmp = mesh->mFaces[i];
+        for (unsigned int ii = 0; ii < ftmp.mNumIndices; ii++){
+            f.push_back(ftmp.mIndices[ii]);
+        }
+    }
 
 
-    Mesh pyramid(verts, inds);
+    Mesh pyramid(v, f);*/
     
     glEnable(GL_DEPTH_TEST);
 
     Camera camera(width, height, glm::vec3(0.0f, 0.0f, 2.0f));
 
     float pointSize = 5;
-    float cFactor = 1.0;
+    float cFactor = 0.5;
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -200,13 +206,17 @@ int main(int argc, char * argv[])
         ImGui::SliderFloat("Far", &camera.farDist, 0.0f, 100.0f);
         ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
         
+        ImGui::Text("Background color");
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
-            
-        ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
+        
+
+        //ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
         ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
         ImGui::Checkbox("Use shadow", &camera.useShadow);
 
-        ImGui::InputText("Enter cloud file path", filepath, 1024);
+        ImGui::Text("Enter cloud file path");
+        ImGui::InputText(" ", filepath, 1024);
+        ImGui::SameLine();
         loadButtonPressed = ImGui::Button("Load");
         
         //show options for each cloud
@@ -218,8 +228,8 @@ int main(int argc, char * argv[])
             ImGui::SliderFloat("PointSize", &c.pointssize, 1, 20);
             ImGui::RadioButton("Default shader", &c.shaderType, 0); ImGui::SameLine();
             ImGui::RadioButton("Monocolor shader", &c.shaderType, 1);
-            ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
-            ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
+            //ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
+            //ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
             
             //Show settings depending on shadertype
             switch (c.shaderType){
@@ -234,11 +244,12 @@ int main(int argc, char * argv[])
                     break;
                 }
                 case 2:{
-                    c.currentShader = &rgbSphereShader;
+                    
+                    //c.currentShader = &rgbSphereShader;
                     break;
                 }
                 case 3:{
-                    c.currentShader = &cubeShader;
+                    //c.currentShader = &cubeShader;
                     break;
                 }
             }
@@ -303,7 +314,7 @@ int main(int argc, char * argv[])
         }
 
 
-        pyramid.Draw(meshShader, camera);
+        //pyramid.Draw(meshShader, camera);
 
         /*
         meshShader.Activate();
@@ -353,10 +364,10 @@ int main(int argc, char * argv[])
 
 
     // Cleanup
-    defaultShader.Delete();
-    monoColorShader.Delete();
-    rgbSphereShader.Delete();
-    cubeShader.Delete();
+    //defaultShader.Delete();
+    //monoColorShader.Delete();
+    //rgbSphereShader.Delete();
+    //cubeShader.Delete();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

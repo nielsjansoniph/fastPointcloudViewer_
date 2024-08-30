@@ -26,7 +26,7 @@ public:
 	float nearDist = 0.1f;
 	float farDist = 15;
 	bool useDepthOnPointsize = 0;
-	bool useDepthOnPointBrightness = 0;
+	bool useDepthOnPointBrightness = 1;
 	bool useShadow = 0;
 
 	// Prevents the camera from jumping around when first clicking left click

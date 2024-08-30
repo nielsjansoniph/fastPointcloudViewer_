@@ -8,6 +8,7 @@ find_package(PkgConfig REQUIRED)
 find_package(glad REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 #message("${PCL_LIBRARIES}=" ${PCL_LIBRARIES})
 
 add_executable(fpcv main.cpp stb.cpp Texture.cpp shaderClass.cpp Camera.cpp Cloud.cpp VBO.cpp VAO.cpp EBO.cpp Mesh.cpp)
@@ -19,6 +20,7 @@ target_link_libraries(fpcv
     glad::glad
     glfw
     imgui::imgui
+    assimp::assimp
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
