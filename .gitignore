@@ -10,3 +10,5 @@ main-surface-kumpe.exe
 build/*
 !build/debug
 .vscode
+iph_full.ply
+light.zip

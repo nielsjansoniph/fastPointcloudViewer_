@@ -40,6 +40,7 @@ namespace fs = std::filesystem;
 //#include <pcl/io/ply_io.h>
 //
 //#include <pcl/point_types.h>
+#include <nfd.h>
 
 
 #include <chrono>
@@ -64,6 +65,8 @@ static void glfw_error_callback(int error, const char* description)
 // Main code
 int main(int argc, char * argv[])
 {   
+
+
 
 
     std::cout << "Input args: " << std::endl;
@@ -130,6 +133,8 @@ int main(int argc, char * argv[])
 
     std::vector<Cloud> clouds;
  
+
+
     /*clouds.push_back(Cloud("scans.ply"));
     clouds[clouds.size()-1].currentShader = &monoColorShader;
     clouds[clouds.size()-1].shaderType = 1;*/
@@ -214,9 +219,9 @@ int main(int argc, char * argv[])
         ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
         ImGui::Checkbox("Use shadow", &camera.useShadow);
 
-        ImGui::Text("Enter cloud file path");
-        ImGui::InputText(" ", filepath, 1024);
-        ImGui::SameLine();
+       // ImGui::Text("Enter cloud file path");
+       // ImGui::InputText(" ", filepath, 1024);
+       // ImGui::SameLine();
         loadButtonPressed = ImGui::Button("Load");
         
         //show options for each cloud
@@ -267,9 +272,38 @@ int main(int argc, char * argv[])
 
         //add new cloud TODO: catch invalid clouds
         if (loadButtonPressed){
-            clouds.push_back(Cloud(filepath));
+                NFD_Init();
+
+        nfdu8char_t *outPath;
+        nfdu8filteritem_t filters[1] = { { "point cloud", "pcd,ply" }};
+        nfdopendialogu8args_t args = {0};
+        args.filterList = filters;
+        args.filterCount = 1;
+        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+        if (result == NFD_OKAY)
+        {
+            puts("Success!");
+            puts(outPath);
+            clouds.push_back(Cloud(outPath));
             clouds[clouds.size()-1].currentShader = &monoColorShader;
             clouds[clouds.size()-1].shaderType = 1;
+            NFD_FreePathU8(outPath);
+        }
+        else if (result == NFD_CANCEL)
+        {
+            puts("User pressed cancel.");
+        }
+        else 
+        {
+            printf("Error: %s\n", NFD_GetError());
+        }
+
+        NFD_Quit();
+
+
+         //   clouds.push_back(Cloud(filepath));
+         // clouds[clouds.size()-1].currentShader = &monoColorShader;
+          //  clouds[clouds.size()-1].shaderType = 1;
             loadButtonPressed = false;
         }
 
