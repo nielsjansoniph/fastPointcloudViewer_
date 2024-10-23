@@ -69,7 +69,7 @@ int main(int argc, char * argv[])
 
 
 
-    std::cout << "Input args: " << std::endl;
+    //std::cout << "Input args: " << std::endl;
     for (int i=0;i<argc;i++){
        std::cout << i << " : " << argv[i] << std::endl; 
     }
@@ -118,6 +118,8 @@ int main(int argc, char * argv[])
 
     gladLoadGL();
 
+    NFD_Init();
+
    
 
     std::cout << "Compiling defaultShader" << std::endl;
@@ -130,7 +132,14 @@ int main(int argc, char * argv[])
     Shader cubeShader("../../default.vert", "../../cube.frag");
     std::cout << "Compiling meshShader" << std::endl;
     Shader meshShader("../../mesh.vert", "../../mesh.frag");
+    
 
+    std::cout << "Compiling colorGradient" << std::endl;
+    Shader colorGradientShader("../../default.vert", "../../colorgradient.frag");
+    std::cout << "Compiling debugShader" << std::endl;
+    Shader debugShader("../../default.vert", "../../debug.frag");
+    std::cout << "Compiling zmapShader" << std::endl;
+    Shader zmapShader("../../default.vert", "../../zmap.frag");
     std::vector<Cloud> clouds;
  
 
@@ -187,6 +196,15 @@ int main(int argc, char * argv[])
     float pointSize = 5;
     float cFactor = 0.5;
 
+    float startDist = 2;
+    float endDist = 100;
+    float startBrightness = 0.8;
+    float endBrightness = 0.2;
+    float split = width / 2;
+    int res = 1080;
+    glm::vec3 startColor = glm::vec3(0.5, 1, 0.5);
+    glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
+
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
@@ -233,9 +251,13 @@ int main(int argc, char * argv[])
             ImGui::SliderFloat("PointSize", &c.pointssize, 1, 20);
             ImGui::RadioButton("Default shader", &c.shaderType, 0); ImGui::SameLine();
             ImGui::RadioButton("Monocolor shader", &c.shaderType, 1);
+            
+
             //ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
             //ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
-            
+            ImGui::RadioButton("ColorGradient shader", &c.shaderType, 4);
+            ImGui::RadioButton("debug shader", &c.shaderType, 5);
+            ImGui::RadioButton("zMap Shader", &c.shaderType, 6);
             //Show settings depending on shadertype
             switch (c.shaderType){
                 case 0:{
@@ -257,6 +279,35 @@ int main(int argc, char * argv[])
                     //c.currentShader = &cubeShader;
                     break;
                 }
+                case 4:{
+                    ImGui::SliderFloat("Start distance", &startDist, 0.0f, 50.f);
+                    ImGui::SliderFloat("End distance", &endDist, 0.0f, 500.0f);
+                    ImGui::SliderFloat("Start Brightness", &startBrightness, 0.0f, 1.0f);
+                    ImGui::SliderFloat("End Brightness", &endBrightness, 0.0f, 1.0f);
+                    ImGui::SliderFloat("CFactor", &cFactor, 0.0f, 10.0f);
+                    //ImGui::ColorEdit3("Color", (float*)&c.point_color);
+                    c.currentShader = &colorGradientShader;
+                    break;
+
+                }
+                case 5:{
+                    ImGui::SliderFloat("Split", &split, 0.0f, (float)width);
+                    ImGui::SliderFloat("Start distance", &startDist, 0.0f, 20.0f);
+                    ImGui::SliderFloat("End distance", &endDist, 0.0f, 50.0f);
+                    ImGui::ColorEdit3("Start color", (float*)&startColor);
+                    ImGui::ColorEdit3("End color", (float*)&endColor);
+                    
+                    c.currentShader = &debugShader;
+                    break;
+                }
+                case 6:{
+                    ImGui::SliderFloat("Split", &split, 0.0f, (float)width);
+                    ImGui::SliderFloat("Start distance", &startDist, c.min.position.y, c.max.position.y);
+                    ImGui::SliderFloat("End distance", &endDist, c.min.position.y, c.max.position.y);
+                    
+                    c.currentShader = &zmapShader;
+                    break;
+                }
             }
 
             ImGui::NewLine();
@@ -272,39 +323,37 @@ int main(int argc, char * argv[])
 
         //add new cloud TODO: catch invalid clouds
         if (loadButtonPressed){
-                NFD_Init();
+                
+            nfdu8char_t *outPath;
+            nfdu8filteritem_t filters[1] = { { "point cloud", "pcd,ply" }};
+            nfdopendialogu8args_t args = {0};
+            args.filterList = filters;
+            args.filterCount = 1;
+            nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+            if (result == NFD_OKAY)
+            {
+                puts("File selected");
+                puts(outPath);
+                clouds.push_back(Cloud(outPath));
+                clouds[clouds.size()-1].currentShader = &monoColorShader;
+                clouds[clouds.size()-1].shaderType = 1;
+                NFD_FreePathU8(outPath);
+                float startDist = clouds[clouds.size()-1].min.position.z;
+                float endDist = clouds[clouds.size()-1].max.position.z;
+            }
+            else if (result == NFD_CANCEL)
+            {
+                puts("User pressed cancel.");
+            }
+            else 
+            {
+                printf("Error: %s\n", NFD_GetError());
+            }
 
-        nfdu8char_t *outPath;
-        nfdu8filteritem_t filters[1] = { { "point cloud", "pcd,ply" }};
-        nfdopendialogu8args_t args = {0};
-        args.filterList = filters;
-        args.filterCount = 1;
-        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
-        if (result == NFD_OKAY)
-        {
-            puts("Success!");
-            puts(outPath);
-            clouds.push_back(Cloud(outPath));
-            clouds[clouds.size()-1].currentShader = &monoColorShader;
-            clouds[clouds.size()-1].shaderType = 1;
-            NFD_FreePathU8(outPath);
-        }
-        else if (result == NFD_CANCEL)
-        {
-            puts("User pressed cancel.");
-        }
-        else 
-        {
-            printf("Error: %s\n", NFD_GetError());
-        }
-
-        NFD_Quit();
-
-
-         //   clouds.push_back(Cloud(filepath));
-         // clouds[clouds.size()-1].currentShader = &monoColorShader;
-          //  clouds[clouds.size()-1].shaderType = 1;
-            loadButtonPressed = false;
+            //   clouds.push_back(Cloud(filepath));
+            // clouds[clouds.size()-1].currentShader = &monoColorShader;
+            //  clouds[clouds.size()-1].shaderType = 1;
+                loadButtonPressed = false;
         }
 
         //update window size
@@ -344,7 +393,7 @@ int main(int argc, char * argv[])
             }
 
             camera.Inputs(window);
-            camera.updateMatrix(45.0f, 0.1f, 200.0f);
+            camera.updateMatrix(45.0f, 0.1f, 500.0f);
         }
 
 
@@ -382,6 +431,37 @@ int main(int argc, char * argv[])
                     glUniform3fv(id, 1, glm::value_ptr(c.point_color));
                     break;
                 }
+                case 4:{
+                    GLuint id = glGetUniformLocation(colorGradientShader.ID, "cFactor");
+                    glUniform1f(id, cFactor);
+                    id = glGetUniformLocation(colorGradientShader.ID, "startDist");
+                    glUniform1f(id, startDist);
+                    id = glGetUniformLocation(colorGradientShader.ID, "endDist");
+                    glUniform1f(id, endDist);
+                    break;
+                }
+                case 5:{
+                    GLuint id = glGetUniformLocation(debugShader.ID, "startDist");
+                    glUniform1f(id, startDist);
+                    id = glGetUniformLocation(debugShader.ID, "endDist");
+                    glUniform1f(id, endDist);
+                    id = glGetUniformLocation(debugShader.ID, "split");
+                    glUniform1f(id, split);
+                    id = glGetUniformLocation(debugShader.ID, "startColor");
+                    glUniform3fv(id, 1, glm::value_ptr(startColor));
+                    id = glGetUniformLocation(debugShader.ID, "endColor");
+                    glUniform3fv(id, 1, glm::value_ptr(endColor));
+                    break;
+                }
+                case 6:{
+                    GLuint id = glGetUniformLocation(zmapShader.ID, "startDist");
+                    glUniform1f(id, startDist);
+                    id = glGetUniformLocation(zmapShader.ID, "endDist");
+                    glUniform1f(id, endDist);
+                    id = glGetUniformLocation(zmapShader.ID, "split");
+                    glUniform1f(id, split);
+                    break;
+                }
             }
         
             c.Draw(camera);
@@ -401,7 +481,9 @@ int main(int argc, char * argv[])
     //defaultShader.Delete();
     //monoColorShader.Delete();
     //rgbSphereShader.Delete();
-    //cubeShader.Delete();
+    //cubeShader.Delete();  
+    NFD_Quit();
+
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

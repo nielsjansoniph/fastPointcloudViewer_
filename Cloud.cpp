@@ -37,7 +37,10 @@ Cloud::Cloud(const std::string filename){
 			42; //TODO error handling
 	}
     
-    
+	pcl::PointXYZ minPt, maxPt;
+    pcl::getMinMax3D(*tmp, minPt, maxPt);
+	min.position.x = minPt.x; min.position.y = minPt.y; min.position.z = minPt.z;
+	max.position.x = maxPt.x; max.position.y = maxPt.y; max.position.z = maxPt.z;
 
 	int n = tmp->points.size();
     std::vector<VertexPosCol> vertices;

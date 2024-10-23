@@ -3,6 +3,7 @@
 
 
 #include <pcl/io/pcd_io.h>
+#include <pcl/common/common.h>
 #include<string>
 
 #include "VAO.h"
@@ -16,10 +17,13 @@
 #include <filesystem>
 #include <iostream>
 
+
 class Cloud
 {
 public:
 	std::vector<VertexPosCol> vertices;
+	VertexPosCol min;
+	VertexPosCol max;
 	// Store VAO in public so it can be used in the Draw function
 	VAO VAO;
 
