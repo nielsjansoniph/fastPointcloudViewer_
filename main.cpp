@@ -50,6 +50,10 @@ namespace fs = std::filesystem;
 #include <numeric>
 #include <vector>
 
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/highgui.hpp>
+
 
 
 const unsigned int width = 1600;
@@ -60,7 +64,6 @@ static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
-
 
 // Main code
 int main(int argc, char * argv[])
@@ -205,11 +208,30 @@ int main(int argc, char * argv[])
     glm::vec3 startColor = glm::vec3(0.5, 1, 0.5);
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
 
+    cv::VideoWriter writer;
+
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
-        glfwPollEvents();
+        static float f = 0.4f;
+        static bool useDepthOnSize = true;
+        static bool loadButtonPressed = false;
+        
+        static char filepath[1024];
+        static bool replayButtonPressed = false;
+        static std::vector <glm::vec3> posPath;
+        static int currentReplayPosition = -1;
+        int i=0;
+        static unsigned int nscreenshots = 0;
+        static GLubyte *pixels = nullptr;
+        static const GLenum FORMAT = GL_RGBA;
+        static const GLuint FORMAT_NBYTES = 4;
+        cv::Mat frame;
 
+        glfwPollEvents();
+ 
+        //Imgui Stuff
+        {
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -218,32 +240,18 @@ int main(int argc, char * argv[])
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         //ImGui::ShowDemoWindow();
 
-        static float f = 0.4f;
-        static bool useDepthOnSize = true;
-        static bool loadButtonPressed = false;
-        static char filepath[1024];
-    
-        ImGui::Begin("Viewer settings");                          // Create a window called "Hello, world!" and append into it.
-
-        ImGui::SliderFloat("Near", &camera.nearDist, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        // Create a window called "Hello, world!" and append into it.
+        ImGui::Begin("Viewer settings");                     
+        ImGui::SliderFloat("Near", &camera.nearDist, 0.0f, 1.0f);
         ImGui::SliderFloat("Far", &camera.farDist, 0.0f, 100.0f);
         ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
-        
         ImGui::Text("Background color");
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
-        
-
         //ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
         ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
         ImGui::Checkbox("Use shadow", &camera.useShadow);
-
-       // ImGui::Text("Enter cloud file path");
-       // ImGui::InputText(" ", filepath, 1024);
-       // ImGui::SameLine();
         loadButtonPressed = ImGui::Button("Load");
-        
         //show options for each cloud
-        int i=0;
         for (auto & c : clouds){
             i++;
             ImGui::PushID(i);
@@ -292,6 +300,9 @@ int main(int argc, char * argv[])
                 }
                 case 5:{
                     ImGui::SliderFloat("Split", &split, 0.0f, (float)width);
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)){
+                        ImGui::SetTooltip("Slide to change debug view border");
+                    }
                     ImGui::SliderFloat("Start distance", &startDist, 0.0f, 20.0f);
                     ImGui::SliderFloat("End distance", &endDist, 0.0f, 50.0f);
                     ImGui::ColorEdit3("Start color", (float*)&startColor);
@@ -316,10 +327,15 @@ int main(int argc, char * argv[])
             
         //ImGui::Text("%d Points", cloud.vertices.size());
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::Text("%d Positions stored", posPath.size());
+        ImGui::SameLine();
+        replayButtonPressed = ImGui::Button("Replay");
         
         ImGui::End();
         // Rendering
         ImGui::Render();
+        }
+
 
         //add new cloud TODO: catch invalid clouds
         if (loadButtonPressed){
@@ -365,11 +381,8 @@ int main(int argc, char * argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         //set pointsize
         
-
-        
-        
-
         //camera rotation and movement update
+        //process keypresses only if the curser isn't over the imgui menus
         if (!ImGui::GetIO().WantCaptureMouse){
 
         //Keyboard movement handling
@@ -391,10 +404,57 @@ int main(int argc, char * argv[])
             if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
                 camera.down();
             }
+            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_C)){// && posPath.back() != camera.Position){
+                if (posPath.size() == 0){
+                    posPath.push_back(camera.Position);
+                }
+                else{
+                    glm::vec3 lastPos = posPath.back();
+                    if (lastPos.x != camera.Position.x && 
+                        lastPos.y != camera.Position.y &&
+                        lastPos.z != camera.Position.z){
+                        posPath.push_back(camera.Position);
+                    }
+                }
+            }
 
             camera.Inputs(window);
             camera.updateMatrix(45.0f, 0.1f, 500.0f);
         }
+
+        if (replayButtonPressed){
+            replayButtonPressed = false;
+            currentReplayPosition = 0;
+            pixels = (GLubyte*) malloc(FORMAT_NBYTES * width * height);
+            
+            int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
+            double fps = 25.0;
+            std::string filename = "./asdf.avi";
+            cv::Size sz;
+            sz.width = width;
+            sz.height = height;
+            writer.open(filename, codec, fps, sz, true);
+            if (!writer.isOpened()) {
+                std::cerr << "Could not open the output video file for write\n";
+                return -1;
+            }
+            
+
+        }
+
+        if (currentReplayPosition != -1){
+            camera.Position = posPath[currentReplayPosition];
+            camera.Inputs(window);
+            camera.updateMatrix(45.0f, 0.1f, 500.0f);
+            if (currentReplayPosition == posPath.size()-1){
+                currentReplayPosition = -1;
+                writer.release();
+            }
+            else{
+                currentReplayPosition++;
+            }
+        }
+
 
 
         //pyramid.Draw(meshShader, camera);
@@ -473,6 +533,22 @@ int main(int argc, char * argv[])
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
+
+        if (currentReplayPosition != -1){
+            //glReadPixels(0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, pixels);
+            frame.create(height, width, CV_8UC3);
+
+            glPixelStorei(GL_PACK_ALIGNMENT, (frame.step & 3) ? 1 : 4);
+            glPixelStorei(GL_PACK_ROW_LENGTH, frame.step/frame.elemSize());
+            glReadPixels(0, 0, frame.cols, frame.rows, GL_BGR, GL_UNSIGNED_BYTE, frame.data);
+            //cv::flip(frame, true, 0);
+            writer.write(frame);
+            42;
+
+
+        }
+
+
     }
 
 

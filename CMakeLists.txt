@@ -10,6 +10,7 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(nfd CONFIG REQUIRED)
+find_package(OpenCV CONFIG REQUIRED)
 #message("${PCL_LIBRARIES}=" ${PCL_LIBRARIES})
 
 add_executable(fpcv main.cpp stb.cpp Texture.cpp shaderClass.cpp Camera.cpp Cloud.cpp VBO.cpp VAO.cpp EBO.cpp Mesh.cpp)
@@ -23,6 +24,7 @@ target_link_libraries(fpcv
     imgui::imgui
     assimp::assimp
     nfd::nfd
+    opencv_ml opencv_dnn opencv_core opencv_flann opencv_videoio
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

@@ -12,3 +12,5 @@ build/*
 .vscode
 iph_full.ply
 light.zip
+build/Debug/asdf.avi
+Riegl_BMW-Werk_Regensburg_e57_blurred.pcd
