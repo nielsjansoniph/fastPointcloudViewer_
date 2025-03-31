@@ -451,7 +451,7 @@ int main(int argc, char * argv[])
             datetime = localtime(&timestamp);
             strftime(output, 50, "%Y_%M_%d_%H_%M_%S", datetime);
             std::string buffer(output);
-            std::string filename = "record" + buffer + ".avi";
+            std::string filename = "../../records/record_" + buffer + ".avi";
             cv::Size sz(width, height);
             //try to open the videowriter and catch an error
             writer.open(filename, codec, fps, sz, true);
@@ -483,6 +483,7 @@ int main(int argc, char * argv[])
 
                 }
             }
+            
 
         }
         else{
@@ -580,10 +581,14 @@ int main(int argc, char * argv[])
 
         
 
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (currentReplayPosition < 0){
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        }
+        
         glfwSwapBuffers(window);
 
         if (currentReplayPosition != -1){
+            ImGui::SetNextWindowCollapsed(true);
             //glReadPixels(0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, pixels);
             frame.create(height, width, CV_8UC3);
 
@@ -593,7 +598,7 @@ int main(int argc, char * argv[])
 
             cv::Mat flipped;
             cv::flip(frame, flipped, 0);
-            writer.write(frame);
+            writer.write(flipped);
             42;
 
 
