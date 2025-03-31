@@ -49,6 +49,7 @@ namespace fs = std::filesystem;
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <cmath>
 
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
@@ -220,6 +221,9 @@ int main(int argc, char * argv[])
         static char filepath[1024];
         static bool replayButtonPressed = false;
         static std::vector <glm::vec3> posPath;
+        static std::vector <glm::vec3> posPathInterpolated;
+        static std::vector <glm::vec3> oriPath;
+        static std::vector <glm::vec3> oriPathInterpolated;
         static int currentReplayPosition = -1;
         int i=0;
         static unsigned int nscreenshots = 0;
@@ -407,13 +411,20 @@ int main(int argc, char * argv[])
             if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_C)){// && posPath.back() != camera.Position){
                 if (posPath.size() == 0){
                     posPath.push_back(camera.Position);
+                    oriPath.push_back(camera.Orientation);
                 }
                 else{
                     glm::vec3 lastPos = posPath.back();
-                    if (lastPos.x != camera.Position.x && 
-                        lastPos.y != camera.Position.y &&
-                        lastPos.z != camera.Position.z){
+                    glm::vec3 lastOri = oriPath.back();
+                    if (lastPos.x != camera.Position.x ||
+                        lastPos.y != camera.Position.y ||
+                        lastPos.z != camera.Position.z ||
+                        lastOri.x != camera.Orientation.x ||
+                        lastOri.y != camera.Orientation.y ||
+                        lastOri.z != camera.Orientation.z)
+                        {
                         posPath.push_back(camera.Position);
+                        oriPath.push_back(camera.Orientation);
                     }
                 }
             }
@@ -422,31 +433,69 @@ int main(int argc, char * argv[])
             camera.updateMatrix(45.0f, 0.1f, 500.0f);
         }
 
-        if (replayButtonPressed){
+        if (replayButtonPressed && posPath.size()>1){
+            //state handling
             replayButtonPressed = false;
             currentReplayPosition = 0;
-            pixels = (GLubyte*) malloc(FORMAT_NBYTES * width * height);
+            //path interpolation
             
+
+            //init and malloc variables
+            pixels = (GLubyte*) malloc(FORMAT_NBYTES * width * height);
             int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
             double fps = 25.0;
-            std::string filename = "./asdf.avi";
-            cv::Size sz;
-            sz.width = width;
-            sz.height = height;
+            time_t timestamp;
+            char output[50];
+            struct tm* datetime;
+            time(&timestamp);
+            datetime = localtime(&timestamp);
+            strftime(output, 50, "%Y_%M_%d_%H_%M_%S", datetime);
+            std::string buffer(output);
+            std::string filename = "record" + buffer + ".avi";
+            cv::Size sz(width, height);
+            //try to open the videowriter and catch an error
             writer.open(filename, codec, fps, sz, true);
             if (!writer.isOpened()) {
                 std::cerr << "Could not open the output video file for write\n";
                 return -1;
             }
             
+            float framePathDist = 0.1;
+            posPathInterpolated.clear();
+            oriPathInterpolated.clear();
+            for (int i=0; i<posPath.size()-1; i++){
+                glm::vec3 diff = posPath[i+1] - posPath[i];
+                float pathDist = glm::length(diff);
+                glm::vec3 dir = glm::normalize(diff);
+                int interpolatesteps = ceil(pathDist / framePathDist);
+                float interpolateDistance = pathDist / interpolatesteps;
+                glm::vec3 interpolateStep = dir * interpolateDistance;
+                for (int ip = 0; ip < interpolatesteps; ip++){
+                    posPathInterpolated.push_back(posPath[i] + interpolateStep * (float) ip);
+                }
+                diff = oriPath[i+1] - oriPath[i];
+                pathDist = glm::length(diff);
+                dir = glm::normalize(diff);
+                interpolateDistance = pathDist / interpolatesteps;
+                interpolateStep = dir * interpolateDistance;
+                for (int ip=0; ip < interpolatesteps; ip++){
+                    oriPathInterpolated.push_back(oriPath[i] + interpolateStep * (float) ip);
 
+                }
+            }
+
+        }
+        else{
+            replayButtonPressed = false;
         }
 
         if (currentReplayPosition != -1){
-            camera.Position = posPath[currentReplayPosition];
+            //camera.Position = posPath[currentReplayPosition];
+            camera.Position = posPathInterpolated[currentReplayPosition];
+            camera.Orientation = oriPathInterpolated[currentReplayPosition];
             camera.Inputs(window);
             camera.updateMatrix(45.0f, 0.1f, 500.0f);
-            if (currentReplayPosition == posPath.size()-1){
+            if (currentReplayPosition == posPathInterpolated.size()-1){
                 currentReplayPosition = -1;
                 writer.release();
             }
@@ -541,7 +590,9 @@ int main(int argc, char * argv[])
             glPixelStorei(GL_PACK_ALIGNMENT, (frame.step & 3) ? 1 : 4);
             glPixelStorei(GL_PACK_ROW_LENGTH, frame.step/frame.elemSize());
             glReadPixels(0, 0, frame.cols, frame.rows, GL_BGR, GL_UNSIGNED_BYTE, frame.data);
-            //cv::flip(frame, true, 0);
+
+            cv::Mat flipped;
+            cv::flip(frame, flipped, 0);
             writer.write(frame);
             42;
 
