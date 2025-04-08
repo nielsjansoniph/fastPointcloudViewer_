@@ -50,6 +50,7 @@ namespace fs = std::filesystem;
 #include <numeric>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
@@ -220,16 +221,25 @@ int main(int argc, char * argv[])
         
         static char filepath[1024];
         static bool replayButtonPressed = false;
+        static bool replayNextButtonPressed = false;
+        static bool replayToEndButtonPressed = false;
         static std::vector <glm::vec3> posPath;
         static std::vector <glm::vec3> posPathInterpolated;
         static std::vector <glm::vec3> oriPath;
         static std::vector <glm::vec3> oriPathInterpolated;
+        static int posPathSelection = -1;
         static int currentReplayPosition = -1;
+        static int wayPointToDelete = -1;
+        static int wayPointUp = -1;
+        static int wayPointDown = -1;
+
         int i=0;
         static unsigned int nscreenshots = 0;
         static GLubyte *pixels = nullptr;
         static const GLenum FORMAT = GL_RGBA;
         static const GLuint FORMAT_NBYTES = 4;
+        static bool loop = true;
+        static bool record = false;
         cv::Mat frame;
 
         glfwPollEvents();
@@ -242,7 +252,7 @@ int main(int argc, char * argv[])
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        //ImGui::ShowDemoWindow();
+        ImGui::ShowDemoWindow();
 
         // Create a window called "Hello, world!" and append into it.
         ImGui::Begin("Viewer settings");                     
@@ -331,10 +341,77 @@ int main(int argc, char * argv[])
             
         //ImGui::Text("%d Points", cloud.vertices.size());
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        ImGui::Text("%d Positions stored", posPath.size());
-        ImGui::SameLine();
         replayButtonPressed = ImGui::Button("Replay");
+        ImGui::SameLine();
+        ImGui::Text("%d Positions", posPath.size());
+        ImGui::SameLine();
+        ImGui::Checkbox("with loop", &loop);
+        ImGui::SameLine();
+        ImGui::Checkbox("and record", &record);
+        replayToEndButtonPressed = ImGui::Button("Replay from selection");
+        ImGui::SameLine();
+        replayNextButtonPressed = ImGui::Button("Replay one step");
         
+        int i=0;
+        static ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+        if (ImGui::BeginTable("Waypoints", 8, flags)){
+                        
+            ImGui::TableSetupColumn("#");
+            ImGui::TableSetupColumn("Pos x");
+            ImGui::TableSetupColumn("Pos y");
+            ImGui::TableSetupColumn("Pos z");
+            ImGui::TableSetupColumn("Ori x");
+            ImGui::TableSetupColumn("Ori y");
+            ImGui::TableSetupColumn("Ori z");
+            ImGui::TableHeadersRow();
+            
+            static int selection = false;
+            for (glm::vec3 pos : posPath){
+                ImGui::PushID(i);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                selection = posPathSelection == i;
+                if (ImGui::Selectable(std::to_string(i).c_str(), selection, 18)){
+                    if (!ImGui::GetIO().KeyCtrl){
+                        posPathSelection = i;
+                        camera.Position = posPath[i];
+                        camera.Orientation = oriPath[i];
+
+                        //camera.Inputs(window);
+                        camera.updateMatrix(45.0f, 0.1f, 500.0f);
+                    }
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%.3f", pos.x);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%.3f", pos.y);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%.3f", pos.z);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("%.3f", oriPath[i].x);
+                ImGui::TableSetColumnIndex(5);
+                ImGui::Text("%.3f", oriPath[i].y);
+                ImGui::TableSetColumnIndex(6);
+                ImGui::Text("%.3f", oriPath[i].z);
+                ImGui::TableSetColumnIndex(7);
+                if (ImGui::SmallButton("x")){wayPointToDelete = i;}
+                ImGui::SameLine();
+                if (ImGui::SmallButton("up")){wayPointUp = i;};
+                ImGui::SameLine();
+                if (ImGui::SmallButton("down")){wayPointDown = i;};
+                
+                i++;
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+            
+        }
+        
+            //ImGui::PushID(i);
+        ImGui::Text("%.1f", (float) wayPointToDelete);
+        ImGui::Text("%.1f", (float) posPathSelection);
+
         ImGui::End();
         // Rendering
         ImGui::Render();
@@ -433,10 +510,54 @@ int main(int argc, char * argv[])
             camera.updateMatrix(45.0f, 0.1f, 500.0f);
         }
 
-        if (replayButtonPressed && posPath.size()>1){
+        //delete waypoint to the "x" clicked row
+        if (wayPointToDelete >= 0){
+            posPath.erase(posPath.begin() + wayPointToDelete);
+            oriPath.erase(oriPath.begin() + wayPointToDelete);
+            //if the last waypoint was selected and deleted, select the new last
+            if (wayPointToDelete <= posPathSelection){
+                posPathSelection--;
+            }
+            //reset delete flag
+            wayPointToDelete = -1;
+        }
+
+        //handle the waypoint up stuff. Up means lower index
+        if (wayPointUp >= 0){
+            if (wayPointUp >= 1){
+                iter_swap(posPath.begin() + wayPointUp,
+                          posPath.begin() + wayPointUp - 1);
+            }
+            //reset the flag
+            wayPointUp = -1;
+        }
+
+        //handle waypoint down stuff. Down means higher index
+        if (wayPointDown >= 0){
+            if (wayPointDown < posPath.size()-1){
+                iter_swap(posPath.begin() + wayPointDown,
+                posPath.begin() + wayPointDown + 1);
+            }
+            //reset the flag
+            wayPointDown = -1;
+        }
+
+
+        int replayStart = 0;
+        int replayEnd = posPath.size() - 1;
+        
+        if (replayToEndButtonPressed || replayNextButtonPressed){
+            replayStart = posPathSelection;
+        }
+        if (replayNextButtonPressed && replayStart < replayEnd){
+            replayEnd = replayStart + 1;
+        }
+
+        if ((replayButtonPressed || replayToEndButtonPressed || replayNextButtonPressed) && posPath.size()>1){
             //state handling
             replayButtonPressed = false;
             currentReplayPosition = 0;
+            
             //path interpolation
             
 
@@ -453,17 +574,19 @@ int main(int argc, char * argv[])
             std::string buffer(output);
             std::string filename = "../../records/record_" + buffer + ".avi";
             cv::Size sz(width, height);
+            if (record){
             //try to open the videowriter and catch an error
-            writer.open(filename, codec, fps, sz, true);
-            if (!writer.isOpened()) {
-                std::cerr << "Could not open the output video file for write\n";
-                return -1;
+                writer.open(filename, codec, fps, sz, true);
+                if (!writer.isOpened()) {
+                    std::cerr << "Could not open the output video file for write\n";
+                    return -1;
+                }
             }
             
             float framePathDist = 0.1;
             posPathInterpolated.clear();
             oriPathInterpolated.clear();
-            for (int i=0; i<posPath.size()-1; i++){
+            for (int i=replayStart; i<replayEnd; i++){
                 glm::vec3 diff = posPath[i+1] - posPath[i];
                 float pathDist = glm::length(diff);
                 glm::vec3 dir = glm::normalize(diff);
@@ -480,6 +603,26 @@ int main(int argc, char * argv[])
                 interpolateStep = dir * interpolateDistance;
                 for (int ip=0; ip < interpolatesteps; ip++){
                     oriPathInterpolated.push_back(oriPath[i] + interpolateStep * (float) ip);
+
+                }
+            }
+            if (loop){
+                glm::vec3 diff = posPath[0] - posPath[posPath.size()-1];
+                float pathDist = glm::length(diff);
+                glm::vec3 dir = glm::normalize(diff);
+                int interpolatesteps = ceil(pathDist / framePathDist);
+                float interpolateDistance = pathDist / interpolatesteps;
+                glm::vec3 interpolateStep = dir * interpolateDistance;
+                for (int ip = 0; ip < interpolatesteps; ip++){
+                    posPathInterpolated.push_back(posPath[posPath.size()-1] + interpolateStep * (float) ip);
+                }
+                diff = oriPath[0] - oriPath[oriPath.size()-1];
+                pathDist = glm::length(diff);
+                dir = glm::normalize(diff);
+                interpolateDistance = pathDist / interpolatesteps;
+                interpolateStep = dir * interpolateDistance;
+                for (int ip=0; ip < interpolatesteps; ip++){
+                    oriPathInterpolated.push_back(oriPath[oriPath.size()-1] + interpolateStep * (float) ip);
 
                 }
             }
@@ -505,7 +648,7 @@ int main(int argc, char * argv[])
             }
         }
 
-
+        
 
         //pyramid.Draw(meshShader, camera);
 
@@ -577,18 +720,14 @@ int main(int argc, char * argv[])
             c.Draw(camera);
         }
 
-
-
-        
-
+        // Don't draw the imGui stuff when the the tracking shot is beeing taken
         if (currentReplayPosition < 0){
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
         
         glfwSwapBuffers(window);
 
-        if (currentReplayPosition != -1){
-            ImGui::SetNextWindowCollapsed(true);
+        if (currentReplayPosition != -1 && record){
             //glReadPixels(0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, pixels);
             frame.create(height, width, CV_8UC3);
 
