@@ -248,8 +248,6 @@ int main(int argc, char * argv[])
     int res = 1080;
     glm::vec3 startColor = glm::vec3(0.5, 1, 0.5);
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
-    float cubeSize = 0.05f;   // edge length of the cubes in the cube shader (world units)
-    float sphereSize = 0.05f; // diameter of the spheres in the sphere shader (world units)
 
     cv::VideoWriter writer;
 
@@ -406,7 +404,7 @@ int main(int argc, char * argv[])
                     break;
                 }
                 case 3:{
-                    ImGui::SliderFloat("Cube size", &cubeSize, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+                    ImGui::TextDisabled("Cube edge length = PointSize in cm");
                     c.currentShader = &cubeShader;
                     break;
                 }
@@ -453,7 +451,7 @@ int main(int argc, char * argv[])
                     break;
                 }
                 case 7:{
-                    ImGui::SliderFloat("Sphere diameter", &sphereSize, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+                    ImGui::TextDisabled("Sphere diameter = PointSize in cm");
                     c.currentShader = &sphereShader;
                     break;
                 }
@@ -833,10 +831,9 @@ int main(int argc, char * argv[])
                     GLuint id = c.currentShader->ID;
                     glm::mat4 invCam = glm::inverse(camera.cameraMatrix);
                     float projScale = (float)display_h / std::tan(glm::radians(45.0f) / 2.0f);
-                    if (c.shaderType == 3)
-                        glUniform1f(glGetUniformLocation(id, "cubeSize"), cubeSize);
-                    else
-                        glUniform1f(glGetUniformLocation(id, "sphereSize"), sphereSize);
+                    // world size follows the PointSize slider: 1 = 1 cm
+                    float worldSize = c.pointssize * 0.01f;
+                    glUniform1f(glGetUniformLocation(id, c.shaderType == 3 ? "cubeSize" : "sphereSize"), worldSize);
                     glUniform1f(glGetUniformLocation(id, "projScale"), projScale);
                     glUniform2f(glGetUniformLocation(id, "viewportSize"), (float)display_w, (float)display_h);
                     glUniformMatrix4fv(glGetUniformLocation(id, "invCamMatrix"), 1, GL_FALSE, glm::value_ptr(invCam));
