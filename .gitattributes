@@ -1,0 +1,15 @@
+# Text files are stored with LF in the repository; the working copy may use
+# CRLF (Windows) or LF (Linux) without showing up as changes.
+* text=auto
+
+# Binary files: never convert
+*.exe binary
+*.dll binary
+*.pdb binary
+*.png binary
+*.jpg binary
+*.stl binary
+*.ply binary
+*.pcd binary
+*.zip binary
+*.avi binary
