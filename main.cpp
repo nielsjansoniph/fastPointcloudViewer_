@@ -180,6 +180,8 @@ int main(int argc, char * argv[])
     Shader debugShader("../../default.vert", "../../debug.frag");
     std::cout << "Compiling zmapShader" << std::endl;
     Shader zmapShader("../../default.vert", "../../zmap.frag");
+    std::cout << "Compiling sphereShader" << std::endl;
+    Shader sphereShader("../../sphere.vert", "../../sphere.frag");
     std::cout << "Compiling axisShader" << std::endl;
     Shader axisShader("../../axis.vert", "../../axis.frag");
     std::vector<Cloud> clouds;
@@ -247,6 +249,7 @@ int main(int argc, char * argv[])
     glm::vec3 startColor = glm::vec3(0.5, 1, 0.5);
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
     float cubeSize = 0.05f;   // edge length of the cubes in the cube shader (world units)
+    float sphereSize = 0.05f; // diameter of the spheres in the sphere shader (world units)
 
     cv::VideoWriter writer;
 
@@ -384,6 +387,7 @@ int main(int argc, char * argv[])
             ImGui::RadioButton("ColorGradient shader", &c.shaderType, 4);
             ImGui::RadioButton("debug shader", &c.shaderType, 5);
             ImGui::RadioButton("zMap Shader", &c.shaderType, 6);
+            ImGui::RadioButton("Sphere shader", &c.shaderType, 7);
             //Show settings depending on shadertype
             switch (c.shaderType){
                 case 0:{
@@ -446,6 +450,11 @@ int main(int argc, char * argv[])
                     ImGui::SliderFloat("End distance", &endDist, yMin, yMax);
                     
                     c.currentShader = &zmapShader;
+                    break;
+                }
+                case 7:{
+                    ImGui::SliderFloat("Sphere diameter", &sphereSize, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+                    c.currentShader = &sphereShader;
                     break;
                 }
             }
@@ -817,15 +826,20 @@ int main(int argc, char * argv[])
                     glUniform3fv(id, 1, glm::value_ptr(c.point_color));
                     break;
                 }
-                case 3:{
-                    // sprite size is computed per point in cube.vert
+                case 3:
+                case 7:{
+                    // Ray-cast cube/sphere: sprite size is computed per point in the vertex shader
                     glEnable(GL_PROGRAM_POINT_SIZE);
+                    GLuint id = c.currentShader->ID;
                     glm::mat4 invCam = glm::inverse(camera.cameraMatrix);
                     float projScale = (float)display_h / std::tan(glm::radians(45.0f) / 2.0f);
-                    glUniform1f(glGetUniformLocation(cubeShader.ID, "cubeSize"), cubeSize);
-                    glUniform1f(glGetUniformLocation(cubeShader.ID, "projScale"), projScale);
-                    glUniform2f(glGetUniformLocation(cubeShader.ID, "viewportSize"), (float)display_w, (float)display_h);
-                    glUniformMatrix4fv(glGetUniformLocation(cubeShader.ID, "invCamMatrix"), 1, GL_FALSE, glm::value_ptr(invCam));
+                    if (c.shaderType == 3)
+                        glUniform1f(glGetUniformLocation(id, "cubeSize"), cubeSize);
+                    else
+                        glUniform1f(glGetUniformLocation(id, "sphereSize"), sphereSize);
+                    glUniform1f(glGetUniformLocation(id, "projScale"), projScale);
+                    glUniform2f(glGetUniformLocation(id, "viewportSize"), (float)display_w, (float)display_h);
+                    glUniformMatrix4fv(glGetUniformLocation(id, "invCamMatrix"), 1, GL_FALSE, glm::value_ptr(invCam));
                     break;
                 }
                 case 4:{
