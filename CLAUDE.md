@@ -7,90 +7,98 @@ Bedienung und Nutzersicht: siehe `README.md`.
 ## Bauen, starten, testen (Linux, Ubuntu 22.04)
 
 ```bash
-cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release   # einmalig
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release   # einmalig bzw. nach neuen Quelldateien
 cmake --build build/linux -j
-cd build/linux && ./fpcv [wolke.ply|wolke.pcd ...]      # MUSS aus build/linux gestartet werden
+./build/linux/fpcv [wolke.ply|wolke.pcd ...]            # aus beliebigem Ordner startbar
 ```
 
-- Shader werden zur Laufzeit relativ über `../../<name>.vert/.frag` geladen → Arbeitsverzeichnis
-  muss zwei Ebenen unter dem Projektordner liegen (`build/linux`, unter Windows `build/Debug`).
-  Shader-Änderungen brauchen keinen Rebuild, nur einen Neustart.
+- Shader werden zur Laufzeit aus `<Projekt>/shaders/` geladen (Pfad per CMake als `FPCV_SOURCE_DIR`
+  einkompiliert, siehe `src/Paths.h`; überschreibbar mit Umgebungsvariable `FPCV_SHADER_DIR`).
+  Shader-Änderungen brauchen keinen Rebuild, nur einen Neustart. Videos landen in `<Projekt>/records/`.
+- Neue `.cpp`-Dateien in `CMakeLists.txt` (`add_executable`) eintragen.
+- Echte Testdaten: `../Punktwolken/jurgensen_merged.ply` (6,8 Mio. Punkte, relativ zum Projektordner).
+  `Riegl_BMW-Werk_Regensburg_e57_blurred.pcd` ist unter Linux nur Nullbytes (OneDrive-Platzhalter).
 - Es gibt keine automatisierten Tests. Prüfen = bauen, starten, Konsole auf
   `SHADER_COMPILATION_ERROR` prüfen, Screenshot ansehen:
   ```bash
-  (./fpcv /pfad/wolke.ply > log.txt 2>&1 &); sleep 5
+  (./build/linux/fpcv ../Punktwolken/jurgensen_merged.ply > log.txt 2>&1 &); sleep 7
   WID=$(xwininfo -root -tree | grep "Fast first person" | awk '{print $1}' | head -1)
-  import -window "$WID" shot.png; pkill -f "^./fpcv"
+  import -window "$WID" shot.png; pkill -x fpcv          # NICHT pkill -f (trifft die eigene Shell)
   ```
   `xdotool` ist nicht installiert – Klicks/Tasten lassen sich nicht simulieren. Für Tests eines
-  bestimmten Zustands (Shader, Kameraposition) vorübergehend Code nach dem Laden der
-  Startdateien in `main.cpp` einfügen und danach wieder entfernen.
-- Kleine Testwolke: ASCII-PLY mit `element vertex N` / `property float x|y|z` selbst erzeugen.
+  Zustands (Shader, Kamerafahrt) vorübergehend Code einfügen (z. B. per `getenv`-Schalter in
+  `Viewer::loadCloud` oder `CameraPath::update`) und danach wieder entfernen. Videos prüfen mit
+  `ffprobe -count_frames`, Einzelbilder mit `ffmpeg -vf select=...`.
 
 ## Abhängigkeiten
 
-- **Linux**: PCL 1.12, OpenCV 4.5, assimp, glm aus apt (installiert). GLFW 3.4, glad 0.1.36,
-  Dear ImGui 1.91.5 und nativefiledialog-extended 1.2.1 (Portal-Backend, kein GTK) holt CMake per
-  `FetchContent` – kein `sudo` nötig. Octomap wird unter Linux nicht gelinkt (im Code unbenutzt).
-- **Windows**: vcpkg, `find_package(...)` im `if(WIN32)`-Zweig von `CMakeLists.txt`. Beide Zweige
-  erhalten; Änderungen an Code/Shadern müssen mit MSVC *und* GCC/Mesa funktionieren.
+- **Linux**: PCL 1.12, OpenCV 4.5, glm aus apt. GLFW 3.4, glad 0.1.36, Dear ImGui 1.91.5 und
+  nativefiledialog-extended 1.2.1 (Portal-Backend, kein GTK) holt CMake per `FetchContent`.
+- **Windows**: vcpkg (pcl, opencv, glad, glfw3, imgui, nfd), `if(WIN32)`-Zweig in `CMakeLists.txt`.
+  Beide Zweige erhalten; Code und Shader müssen mit MSVC *und* GCC/Mesa funktionieren.
+  Der Windows-Build wird hier nicht getestet.
 
-## Architektur
+## Architektur (`src/`)
 
 | Datei | Inhalt |
 |---|---|
-| `main.cpp` | Fast alles: Init, Shader-Erzeugung, ImGui-Menü, Hauptschleife, Rendering, Kamerafahrten/Videoaufnahme (OpenCV) |
-| `Camera.*` | Position/Orientierung, **Z ist oben** (`Up = (0,0,1)`), WASD/RF-Bewegung (m/s × Frame-Zeit), Mausrotation, `rotate()` für Pfeiltasten, setzt gemeinsame Uniforms (`camMatrix`, `near`, `far`, `cameraPosition`, …) |
-| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error` bei Fehlern), lädt nur Positionen (12 Byte/Punkt) auf die GPU und behält keine Punktdaten im RAM; hält `numPoints`, Bounding Box (`min`/`max`), VAO, `shaderType`, `pointssize` |
-| `shaderClass.*`, `VAO/VBO/EBO.*` | Dünne OpenGL-Wrapper |
-| `Mesh.*`, `Texture.*`, `mesh*`, `light*`, `meshTexShader*` | Mesh-Rendering, derzeit auskommentiert/ungenutzt |
-| `happly.h`, `stb_image.h` | Eingebundene Header-Bibliotheken – nicht anfassen |
+| `main.cpp` | Kommandozeile, GLFW/glad/ImGui-Init, Hauptschleife (`viewer.frame()`, `afterRender()`, Swap) |
+| `Viewer.*` | Anwendung: besitzt Kamera, Wolken, Shader-Tabelle, Achsen, Kamerafahrt, Modellrotation; Menü, Eingabe, Rendering |
+| `PointShaders.*` | **Tabelle aller Punkt-Shader**: Name, Shader-Dateien, Menü-Optionen, Uniforms. Neuer Shader = ein Eintrag in `createPointShaders()` |
+| `CameraPath.*` | Wegpunkte, Interpolation (Strecke + Winkel), Replay, Videoaufnahme (OpenCV, MJPG) |
+| `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
+| `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
+| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error`), nur Positionen (12 Byte/Punkt) auf die GPU, keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
+| `Shader.*` | Shader-Programm; löst `#include "datei.glsl"` in Shader-Dateien auf |
+| `VAO.*`, `VBO.*` | Dünne OpenGL-Wrapper |
+| `Paths.h`, `UiWidgets.h` | Laufzeitpfade; `SliderFloatWithButtons` (Regler mit −/+) |
 
-### Hauptschleife in `main.cpp` (Reihenfolge ist wichtig)
-1. ImGui-Frame + Menü „Viewer settings“ (Regler, Orientation, pro Wolke Shader-Auswahl, Wegpunkt-Tabelle)
-2. Laden über „Load“-Button (`loadCloud`-Lambda, auch für Kommandozeilen-Argumente)
-3. Tastatur/Maus → Kamera (`ImGui::IsKeyDown(ImGuiKey_*)`, nur wenn ImGui die Maus nicht will)
-4. Kamerafahrt-Logik (Wegpunkte `posPath`/`oriPath`, Interpolation, Aufnahme)
-5. `modelMatrix` = Rotation um Mittelpunkt aller Wolken; Wolken zeichnen (Uniforms je `shaderType`)
-6. Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList)
-7. `ImGui::Render()` erst hier (damit Achsenbeschriftung nach dem Kamera-Update entsteht), dann Draw-Data, Swap, ggf. Videoframe
+### Ablauf eines Frames (`Viewer::frame`, Reihenfolge ist wichtig)
+1. ImGui-Frame, Menü (`drawUi`), ggf. Datei-Dialog
+2. Fenstergröße → Kamera; Eingabe (nur wenn keine Kamerafahrt läuft und die Maus nicht über dem Menü ist)
+3. `CameraPath::update` (startet Fahrt, setzt Kamera-Pose), `camera.updateMatrix`
+4. `render`: Modellmatrix, Wolken (Uniforms aus der Shader-Tabelle), Achsen, `ImGui::Render()`
+   erst hier (Achsenbeschriftung braucht die aktuelle Kameramatrix), Menü nur ohne Kamerafahrt
+5. `afterRender` → `CameraPath::afterRender` liest das Bild **vor** `glfwSwapBuffers` für das Video aus
 
-### Shader (`Cloud::shaderType`)
-| Typ | Name | Dateien | Hinweis |
+### Shader (`shaders/`)
+| Index | Name | Dateien | Hinweis |
 |---|---|---|---|
-| 0 | Default | `default.vert` + `default.frag` | Farbe nach Tiefe (HSV) |
-| 1 | Monocolor | `default.vert` + `monoColor.frag` | Standard beim Laden |
-| 2 | RGB sphere | `rgbSphere.frag` | im Menü auskommentiert |
-| 3 | Cube | `cube.vert` + `cube.frag` | Raycast achsenparalleler Würfel |
-| 4 | ColorGradient | `default.vert` + `colorgradient.frag` | |
-| 5 | Debug | `default.vert` + `debug.frag` | geteilte Ansicht (`split`) |
-| 6 | zMap | `default.vert` + `zmap.frag` | Farbe nach Höhe **z** |
-| 7 | Sphere | `sphere.vert` + `sphere.frag` | Raycast Kugel |
+| 0 | Default | `points.vert` + `default.frag` | Farbe nach Tiefe (HSV) |
+| 1 | Monocolor | `points.vert` + `monoColor.frag` | Standard beim Laden (`kDefaultPointShader`) |
+| 2 | Cube | `cube.vert` + `cube.frag` | Raycast achsenparalleler Würfel |
+| 3 | ColorGradient | `points.vert` + `colorgradient.frag` | Start/End Brightness im Menü sind (noch) ohne Wirkung |
+| 4 | Debug | `points.vert` + `debug.frag` | geteilte Ansicht (`split`) |
+| 5 | zMap | `points.vert` + `zmap.frag` | Farbe nach Höhe **z** |
+| 6 | Sphere | `sphere.vert` + `sphere.frag` | Raycast Kugel |
 | – | Achsen | `axis.vert` + `axis.frag` | Koordinatenkreuz |
 
-- `default.vert` hat `uniform mat4 model` (Modellrotation); `pointPosition` ist in Weltkoordinaten.
-- Cube/Sphere: Vertex-Shader setzt `gl_PointSize` aus Weltgröße und Entfernung
-  (`GL_PROGRAM_POINT_SIZE` nur für diese beiden aktivieren); Fragment-Shader schneidet den Sichtstrahl
-  analytisch (`invCamMatrix`, `viewportSize`), schreibt `gl_FragDepth`. Größe = `pointssize` in cm.
-- Die Projektion ist fest `updateMatrix(45°, 0.1, 500)`; die Regler Near/Far steuern **nur** die
-  Helligkeitsabnahme (`linearizeDepth` + `logisticDepth` in den Fragment-Shadern).
+- `common.glsl`: gemeinsame Uniforms (`near`, `far`, `useDepthOn…`, `useShadow`, `cameraPosition`)
+  und Funktionen (`linearizeDepth`, `logisticDepth`, `hsv2rgb`, `map`, `spriteHeight`). Diese Uniforms
+  daher **nicht** nochmal im Fragment-Shader deklarieren.
+- `points.vert` hat `uniform mat4 model` (Modellrotation); `pointPosition` ist in Weltkoordinaten.
+- Cube/Sphere (`programPointSize = true`): Vertex-Shader setzt `gl_PointSize` aus Weltgröße
+  (= PointSize in cm) und Entfernung; Fragment-Shader schneidet den Sichtstrahl analytisch
+  (`invCamMatrix`, `viewportSize`) und schreibt `gl_FragDepth`.
+- Projektion fest `45°, 0.1, 500` (`Viewer.cpp`); die Regler Near/Far steuern **nur** die
+  Helligkeitsabnahme in den Fragment-Shadern.
 
 ## Stolperfallen (alle real aufgetreten)
 
-- **GLSL für Mesa**: keine Default-Werte für Funktionsparameter (`float f(float x = 1.0)`) –
-  NVIDIA/Windows akzeptiert das, Mesa nicht. Uniform-Initialisierer (`uniform float x = 1.0;`) sind ok.
-- **ImGui-Tasten**: immer `ImGuiKey_W` usw., niemals `(ImGuiKey)GLFW_KEY_W` – neuere ImGui ignoriert das stillschweigend.
+- **GLSL für Mesa**: keine Default-Werte für Funktionsparameter – NVIDIA/Windows akzeptiert das,
+  Mesa nicht. Uniform-Initialisierer (`uniform float x = 1.0;`) sind ok.
+- **ImGui-Tasten**: immer `ImGuiKey_W` usw., niemals `(ImGuiKey)GLFW_KEY_W` – wird stillschweigend ignoriert.
 - **GCC**: Member mit gleichem Namen wie sein Typ (`VAO VAO;`) muss als `::VAO VAO;` geschrieben werden.
-- `imgui_impl_opengl3_loader.h` nicht einbinden (überschreibt glad-Funktionen).
-- Bewegungen/Rotationen immer mit `ImGui::GetIO().DeltaTime` skalieren – das Programm läuft mit ~240 FPS.
-- Neue Regler mit −/+-Buttons: `SliderFloatWithButtons(label, &wert, min, max, faktor, format, flags)` in `main.cpp`.
+- `<glad/glad.h>` immer vor `<GLFW/glfw3.h>` einbinden; `imgui_impl_opengl3_loader.h` nie einbinden.
+- Bewegungen/Rotationen mit `ImGui::GetIO().DeltaTime` skalieren – das Programm läuft mit ~120–240 FPS.
+- Videoaufnahme ist langsam (~3 Bilder/s beim Aufnehmen), Ursache nicht untersucht.
 
 ## Git / Dateisystem
 
 - Projekt liegt auf einem **NTFS-Laufwerk in OneDrive**, das Windows und Linux gemeinsam nutzen.
-  Arbeitskopie hat CRLF, das Repo speichert LF (`.gitattributes`: `* text=auto`). Beim Bearbeiten
-  die vorhandenen Zeilenenden der Datei beibehalten. `git diff` kann ganze Dateien als geändert
-  anzeigen (liest die CRLF-Arbeitskopie); maßgeblich ist `git diff --numstat` bzw. `git diff -w`.
+  Ältere Dateien haben CRLF, neue LF; das Repo speichert LF (`.gitattributes`: `* text=auto`).
+  `git diff` kann ganze Dateien als geändert zeigen (liest die CRLF-Arbeitskopie); maßgeblich ist
+  `git diff --numstat` bzw. `git diff -w`.
 - Fehler „Unzureichende Berechtigung … .git/objects“: NTFS-Schreibschutz auf Objekt-Ordnern →
   `find .git -type d ! -writable -exec chmod u+w {} +`.
 - Keine globale Git-Identität unter Linux: für Commits
@@ -98,9 +106,11 @@ cd build/linux && ./fpcv [wolke.ply|wolke.pcd ...]      # MUSS aus build/linux g
 - `build/Debug/fpcv.exe` (Windows-Build) ist getrackt und lokal oft geändert – nicht mitcommitten,
   außer der Nutzer will es. `*.pdb` ist ignoriert (GitHub-Limit 100 MB).
 - Push zu GitHub bricht gelegentlich mit Timeout ab – einfach erneut versuchen.
-- Große Testdaten (`*.ply`, `*.pcd`, `records/`) sind ignoriert, nicht committen.
+- Große Testdaten (`*.ply`, `*.pcd`, `records/`) sind ignoriert, nicht committen. Keine
+  Wildcard-Löschungen in `records/` (könnte Videos des Nutzers treffen), nur eigene Dateien gezielt.
 
 ## Arbeitsweise mit dem Nutzer
 
 - Kommunikation auf Deutsch. Code-Kommentare und Commit-Messages auf Englisch.
 - Der Nutzer entscheidet über Commit und Push; häufig „committen, später pushen“.
+- Nicht breit über `/home` oder `/media` nach Dateien suchen – nach dem Pfad fragen.

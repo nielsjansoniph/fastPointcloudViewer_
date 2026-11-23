@@ -12,7 +12,7 @@ Benötigte Pakete (einmalig):
 
 ```bash
 sudo apt install build-essential cmake git pkg-config \
-    libpcl-dev libopencv-dev libassimp-dev libglm-dev \
+    libpcl-dev libopencv-dev libglm-dev \
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
     libwayland-dev libxkbcommon-dev libgl-dev libdbus-1-dev python3
 ```
@@ -26,20 +26,26 @@ cmake --build build/linux -j
 
 ### Windows
 
-Abhängigkeiten über vcpkg (octomap, pcl, glad, glfw3, imgui, assimp, nfd, opencv), dann mit
+Abhängigkeiten über vcpkg (pcl, opencv, glad, glfw3, imgui, nfd), dann mit
 CMake bauen, z. B. in VS Code. Ausgabe nach `build/Debug`.
 
 ## Starten
 
-Das Programm lädt die Shader relativ zum Arbeitsverzeichnis (`../../`). Deshalb immer aus dem
-Build-Ordner starten:
+Das Programm kann aus jedem Ordner gestartet werden; die Shader findet es über den beim Bauen
+einkompilierten Projektpfad (`shaders/`, abweichend per Umgebungsvariable `FPCV_SHADER_DIR`).
 
 ```bash
-cd build/linux
-./fpcv                          # leer starten, Wolken über „Load“ laden
-./fpcv ../../scan.ply andere.pcd  # Wolken direkt beim Start laden
-./fpcv --help
+./build/linux/fpcv                           # leer starten, Wolken über „Load“ laden
+./build/linux/fpcv scan.ply andere.pcd       # Wolken direkt beim Start laden
+./build/linux/fpcv --help
 ```
+
+## Projektstruktur
+
+- `src/` – C++-Quellen (`main.cpp` Einstieg, `Viewer` Anwendung, `PointShaders` Tabelle aller Shader,
+  `CameraPath` Kamerafahrten, `Axes`, `Camera`, `Cloud`, …)
+- `shaders/` – GLSL-Shader; `common.glsl` enthält gemeinsame Uniforms und Funktionen
+- `records/` – aufgenommene Videos
 
 ## Bedienung
 
@@ -64,8 +70,8 @@ Die Tastatur wirkt nur, solange der Mauszeiger nicht über dem Menü steht.
   - *Monocolor*: einheitliche Farbe
   - *Cube*: jeder Punkt als Würfel, jede Seite eigene Farbe (+X rot, −X cyan, +Y grün, −Y magenta, +Z blau, −Z gelb); Kantenlänge = PointSize in cm
   - *Sphere*: jeder Punkt als Kugel mit denselben Richtungsfarben, stufenlos; Durchmesser = PointSize in cm
-  - *ColorGradient*, *debug*: Farbverläufe nach Entfernung
+  - *ColorGradient*, *Debug*: Farbverläufe nach Entfernung
   - *zMap*: Farbe nach Höhe (Z)
 - **Replay / Wegpunkt-Tabelle**: aufgenommene Wegpunkte abfahren, optional als Schleife und als
-  Video aufzeichnen (MJPG-`.avi` im Ordner `records/` des Projekts, der Ordner muss existieren);
+  Video aufzeichnen (MJPG-`.avi` mit 25 Bildern/s im Ordner `records/` des Projekts);
   Wegpunkte auswählen, löschen, verschieben.

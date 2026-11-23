@@ -4,20 +4,17 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(PCL REQUIRED COMPONENTS common io)
 find_package(OpenCV REQUIRED COMPONENTS core videoio)
-find_package(assimp CONFIG REQUIRED)
 
 if(WIN32)
     # Windows: dependencies via vcpkg
-    find_package(octomap REQUIRED)
     find_package(glad REQUIRED)
     find_package(glfw3 CONFIG REQUIRED)
     find_package(imgui CONFIG REQUIRED)
     find_package(nfd CONFIG REQUIRED)
     set(FPCV_GUI_LIBS
-        octomap octomath octomap-static octomath-static
         glad::glad glfw imgui::imgui nfd::nfd)
 else()
-    # Linux (e.g. Ubuntu 22.04): PCL, OpenCV, assimp, glm from apt;
+    # Linux (e.g. Ubuntu 22.04): PCL, OpenCV, glm from apt;
     # GLFW, glad, Dear ImGui and nativefiledialog-extended are fetched here.
     include(FetchContent)
 
@@ -52,15 +49,28 @@ else()
     set(FPCV_GUI_LIBS glad glfw imgui nfd OpenGL::GL ${CMAKE_DL_LIBS})
 endif()
 
-add_executable(fpcv main.cpp stb.cpp Texture.cpp shaderClass.cpp Camera.cpp Cloud.cpp VBO.cpp VAO.cpp EBO.cpp Mesh.cpp)
+add_executable(fpcv
+    src/main.cpp
+    src/Viewer.cpp
+    src/PointShaders.cpp
+    src/CameraPath.cpp
+    src/Axes.cpp
+    src/Camera.cpp
+    src/Cloud.cpp
+    src/Shader.cpp
+    src/VAO.cpp
+    src/VBO.cpp
+)
 
-target_include_directories(fpcv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PCL_INCLUDE_DIRS})
-target_compile_definitions(fpcv PRIVATE ${PCL_DEFINITIONS})
+target_include_directories(fpcv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${PCL_INCLUDE_DIRS})
+# Shaders and the records/ folder are located via the source directory, so the
+# program can be started from any working directory.
+target_compile_definitions(fpcv PRIVATE ${PCL_DEFINITIONS}
+    FPCV_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(fpcv
     ${FPCV_GUI_LIBS}
     ${PCL_LIBRARIES}
-    assimp::assimp
     ${OpenCV_LIBS}
 )
 

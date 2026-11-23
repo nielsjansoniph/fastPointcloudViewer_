@@ -5,28 +5,12 @@ out vec4 FragColor;
 
 flat in vec3 cubeCenter;
 
+#include "common.glsl"
+
 uniform mat4 camMatrix;
 uniform mat4 invCamMatrix;
 uniform vec2 viewportSize;
-uniform vec3 cameraPosition;
 uniform float cubeSize = 0.05;
-uniform float useDepthOnPointBrightness = 1.0;
-uniform float near = 0.01f;
-uniform float far = 10.0f;
-
-// Same depth-to-brightness mapping as the other point shaders (reacts to the Near/Far sliders)
-float linearizeDepth(float depth)
-{
-	return (2.0 * near * far) / (far + near - (depth * 2.0 - 1.0) * (far - near));
-}
-
-float logisticDepth(float depth)
-{
-	const float steepness = 0.5f;
-	const float offset = 5.0f;
-	float zVal = linearizeDepth(depth);
-	return (1 / (1 + exp(-steepness * (zVal - offset))));
-}
 
 void main()
 {
