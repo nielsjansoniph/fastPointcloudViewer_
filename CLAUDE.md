@@ -110,6 +110,20 @@ cmake --build build/linux -j
 - Große Testdaten (`*.ply`, `*.pcd`, `records/`) sind ignoriert, nicht committen. Keine
   Wildcard-Löschungen in `records/` (könnte Videos des Nutzers treffen), nur eigene Dateien gezielt.
 
+## Offene Punkte (Stand 2026-11-23)
+
+Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
+- **Windows-Build prüfen**: octomap/assimp wurden auch im `WIN32`-Zweig entfernt, Umstrukturierung
+  nach `src/`/`shaders/` – unter Windows noch nicht gebaut.
+- **Binärdateien aus Git entfernen?** `main.exe` (42 MB), `default.exe`, DLLs und Textur in
+  `build/Debug` sind getrackt. Entfernen nur nach Zustimmung (andere Clones verlieren sie beim Pull).
+- **ColorGradient**: Regler „Start/End Brightness“ wirkungslos – entfernen oder einbauen? Nutzer fragen.
+- **LOD/Culling** für sehr große Wolken (Blöcke + Frustum-Culling, gröbere Darstellung in der Ferne):
+  größerer Umbau, nur bei Bedarf.
+- **Videoaufnahme langsam** (~3 Bilder/s): Ursache (glReadPixels, MJPG-Kodierung oder NTFS) nicht eingegrenzt.
+- **Optional**: echte Raycast-Kugeln mit den Farben aus der Datei (wie Sphere, aber RGB).
+- Kamerafahrt bewegt sich 0,1 m bzw. 2° pro Bild (im Video 25 Bilder/s korrekt, live bildratenabhängig).
+
 ## Arbeitsweise mit dem Nutzer
 
 - Kommunikation auf Deutsch. Code-Kommentare und Commit-Messages auf Englisch.
