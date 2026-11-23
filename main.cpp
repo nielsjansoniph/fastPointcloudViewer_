@@ -65,7 +65,7 @@ const unsigned int height = 900;
  
 
 // Slider with -/+ buttons left and right; each click divides/multiplies the value by `factor`
-static bool SliderFloatWithButtons(const char* label, float* v, float vMin, float vMax, float factor = 1.25f, const char* format = "%.3f")
+static bool SliderFloatWithButtons(const char* label, float* v, float vMin, float vMax, float factor = 1.25f, const char* format = "%.3f", ImGuiSliderFlags flags = 0)
 {
     ImGui::PushID(label);
     bool changed = false;
@@ -78,7 +78,7 @@ static bool SliderFloatWithButtons(const char* label, float* v, float vMin, floa
     }
     ImGui::SameLine(0, spacing);
     ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 2 * (buttonWidth + spacing));
-    changed |= ImGui::SliderFloat("##slider", v, vMin, vMax, format);
+    changed |= ImGui::SliderFloat("##slider", v, vMin, vMax, format, flags);
     ImGui::SameLine(0, spacing);
     if (ImGui::Button("+", ImVec2(buttonWidth, 0))){
         *v = std::min(vMax, std::max(clickMin, *v) * factor);
@@ -307,7 +307,7 @@ int main(int argc, char * argv[])
         ImGui::Begin("Viewer settings");                     
         SliderFloatWithButtons("Near", &camera.nearDist, 0.0f, 1.0f);
         SliderFloatWithButtons("Far", &camera.farDist, 0.0f, 100.0f);
-        SliderFloatWithButtons("Speed", &camera.speed, 0.0f, 3.0f);
+        SliderFloatWithButtons("Speed (m/s)", &camera.speed, 0.0f, 50.0f, 1.25f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::Text("Background color");
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
         //ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
@@ -552,24 +552,25 @@ int main(int argc, char * argv[])
         //process keypresses only if the curser isn't over the imgui menus
         if (!ImGui::GetIO().WantCaptureMouse){
 
-        //Keyboard movement handling
+        //Keyboard movement handling, independent of the frame rate
+            float dt = ImGui::GetIO().DeltaTime;
             if (ImGui::IsKeyDown(ImGuiKey_W))
-                camera.forward();
+                camera.forward(dt);
             
             if (ImGui::IsKeyDown(ImGuiKey_A))
-                camera.left();
+                camera.left(dt);
 
             if (ImGui::IsKeyDown(ImGuiKey_S))
-                camera.backward();
+                camera.backward(dt);
 
             if (ImGui::IsKeyDown(ImGuiKey_D))
-                camera.right();
+                camera.right(dt);
 
             if (ImGui::IsKeyDown(ImGuiKey_R)){
-                camera.up();
+                camera.up(dt);
             }
             if (ImGui::IsKeyDown(ImGuiKey_F)){
-                camera.down();
+                camera.down(dt);
             }
             //Arrow keys: look around (alternative to the mouse), independent of the frame rate
             float keyRot = camera.keyRotSpeed * ImGui::GetIO().DeltaTime;

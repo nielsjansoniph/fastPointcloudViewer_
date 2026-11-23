@@ -37,8 +37,8 @@ public:
 	int width;
 	int height;
 
-	// Adjust the speed of the camera and it's sensitivity when looking around
-	float speed = 0.1f;
+	// Movement speed in world units (m) per second, and sensitivity when looking around
+	float speed = 5.0f;
 	float sensitivity = 100.0f;
 	// Rotation speed in degrees per second when looking around with the arrow keys
 	float keyRotSpeed = 60.0f;
@@ -48,12 +48,13 @@ public:
 	// Camera constructor to set up initial values
 	Camera(int width, int height, glm::vec3 position);
 
-    void forward();
-    void backward();
-    void left();
-    void right();
-    void up();
-    void down();
+    // Move the camera; dt = time since the last frame in seconds
+    void forward(float dt);
+    void backward(float dt);
+    void left(float dt);
+    void right(float dt);
+    void up(float dt);
+    void down(float dt);
     // Rotates the view: yaw (left/right) and pitch (up/down) in degrees
     void rotate(float yawDeg, float pitchDeg);
 

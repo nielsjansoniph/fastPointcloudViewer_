@@ -57,23 +57,23 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 
 }
 
-void Camera::forward(){
-	Position += speed * Orientation;
+void Camera::forward(float dt){
+	Position += speed * dt * Orientation;
 }
-void Camera::backward(){
-	Position += speed * -Orientation;;
+void Camera::backward(float dt){
+	Position += speed * dt * -Orientation;
 }
-void Camera::left(){
-	Position += speed * -glm::normalize(glm::cross(Orientation, Up));
+void Camera::left(float dt){
+	Position += speed * dt * -glm::normalize(glm::cross(Orientation, Up));
 }
-void Camera::right(){
-	Position += speed * glm::normalize(glm::cross(Orientation, Up));
+void Camera::right(float dt){
+	Position += speed * dt * glm::normalize(glm::cross(Orientation, Up));
 }
-void Camera::up(){
-	Position += speed * Up;
+void Camera::up(float dt){
+	Position += speed * dt * Up;
 }
-void Camera::down(){
-	Position += speed * -Up;
+void Camera::down(float dt){
+	Position += speed * dt * -Up;
 }
 
 void Camera::rotate(float yawDeg, float pitchDeg){
