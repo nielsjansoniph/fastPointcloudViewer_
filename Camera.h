@@ -20,8 +20,9 @@ public:
 
 	// Stores the main vectors of the camera
 	glm::vec3 Position;
-	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
+	// Z is up: initially looking along +Y, so X points to the right
+	glm::vec3 Orientation = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 Up = glm::vec3(0.0f, 0.0f, 1.0f);
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
 	float nearDist = 0.1f;
 	float farDist = 15;
@@ -39,8 +40,8 @@ public:
 	// Adjust the speed of the camera and it's sensitivity when looking around
 	float speed = 0.1f;
 	float sensitivity = 100.0f;
-	// Rotation per frame in degrees when looking around with the arrow keys
-	float keyRotSpeed = 1.5f;
+	// Rotation speed in degrees per second when looking around with the arrow keys
+	float keyRotSpeed = 60.0f;
 
 
 

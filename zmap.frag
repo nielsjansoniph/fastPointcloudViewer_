@@ -84,7 +84,7 @@ void main()
 
         if (gl_FragCoord.x > split){
 
-            float h = map(pointPosition.y, startDist, endDist, 0.1, 0.9);
+            float h = map(pointPosition.z, startDist, endDist, 0.1, 0.9);
 
             float z = sqrt(dSize - (gl_PointCoord.x-0.5)*(gl_PointCoord.x-0.5)*4.0/dSize/dSize - (gl_PointCoord.y-0.5)*(gl_PointCoord.y-0.5)*4.0/dSize/dSize);
             float dBrightness = 1.0-depth*useDepthOnPointBrightness;
@@ -95,16 +95,16 @@ void main()
 
             FragColor = vec4(c, 1.0);
 
-            if (pointPosition.y < startDist)
+            if (pointPosition.z < startDist)
                 FragColor = vec4(hsv2rgb(vec3(0.1, 1.0, v)), 1.0);
-            if (pointPosition.y > endDist)
+            if (pointPosition.z > endDist)
                 FragColor = vec4(hsv2rgb(vec3(0.9, 1.0, v)), 1.0);
         }
         else{
             FragColor = vec4(vec3(0.5), 1.0);
-            if (pointPosition.y < startDist)
+            if (pointPosition.z < startDist)
                 FragColor = vec4(vec3(0.25), 1.0);
-            if (pointPosition.y> endDist)
+            if (pointPosition.z> endDist)
                 FragColor = vec4(vec3(0.75), 1.0);
         }
             

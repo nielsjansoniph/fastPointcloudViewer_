@@ -50,6 +50,8 @@ namespace fs = std::filesystem;
 #include <numeric>
 #include <vector>
 #include <cmath>
+#include <cfloat>
+#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 
 #include <opencv2/core.hpp>
@@ -145,6 +147,8 @@ int main(int argc, char * argv[])
     Shader debugShader("../../default.vert", "../../debug.frag");
     std::cout << "Compiling zmapShader" << std::endl;
     Shader zmapShader("../../default.vert", "../../zmap.frag");
+    std::cout << "Compiling axisShader" << std::endl;
+    Shader axisShader("../../axis.vert", "../../axis.frag");
     std::vector<Cloud> clouds;
  
 
@@ -196,7 +200,7 @@ int main(int argc, char * argv[])
     
     glEnable(GL_DEPTH_TEST);
 
-    Camera camera(width, height, glm::vec3(0.0f, 0.0f, 2.0f));
+    Camera camera(width, height, glm::vec3(0.0f, -2.0f, 0.0f));
 
     float pointSize = 5;
     float cFactor = 0.5;
@@ -211,6 +215,27 @@ int main(int argc, char * argv[])
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
 
     cv::VideoWriter writer;
+
+    // Model orientation: rotated in 90 degree steps around the center of the loaded clouds
+    glm::mat4 modelRotation = glm::mat4(1.0f);
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
+    glm::vec3 modelCenter = glm::vec3(0.0f);
+
+    // Coordinate axes (unit length, scaled by axisLength), drawn at modelCenter
+    bool showAxes = true;
+    float axisLength = 1.0f;
+    std::vector<VertexPosCol> axisVertices = {
+        {{0.0f, 0.0f, 0.0f}, {1.0f, 0.2f, 0.2f}}, {{1.0f, 0.0f, 0.0f}, {1.0f, 0.2f, 0.2f}},
+        {{0.0f, 0.0f, 0.0f}, {0.2f, 1.0f, 0.2f}}, {{0.0f, 1.0f, 0.0f}, {0.2f, 1.0f, 0.2f}},
+        {{0.0f, 0.0f, 0.0f}, {0.3f, 0.5f, 1.0f}}, {{0.0f, 0.0f, 1.0f}, {0.3f, 0.5f, 1.0f}},
+    };
+    VAO axisVAO;
+    axisVAO.Bind();
+    VBO axisVBO(axisVertices);
+    axisVAO.LinkAttrib(axisVBO, 0, 3, GL_FLOAT, sizeof(VertexPosCol), (void*)0);
+    axisVAO.LinkAttrib(axisVBO, 1, 3, GL_FLOAT, sizeof(VertexPosCol), (void*)(3 * sizeof(float)));
+    axisVAO.Unbind();
+    axisVBO.Unbind();
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -251,19 +276,58 @@ int main(int argc, char * argv[])
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        ImGui::ShowDemoWindow();
-
         // Create a window called "Hello, world!" and append into it.
         ImGui::Begin("Viewer settings");                     
         ImGui::SliderFloat("Near", &camera.nearDist, 0.0f, 1.0f);
         ImGui::SliderFloat("Far", &camera.farDist, 0.0f, 100.0f);
-        ImGui::SliderFloat("Speed", &camera.speed, 0.0f, 3.0f);
+        // Speed: slider with -/+ buttons (each click changes the speed by a factor of 1.25)
+        {
+            float buttonWidth = ImGui::GetFrameHeight();
+            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            if (ImGui::Button("-##speed", ImVec2(buttonWidth, 0)))
+                camera.speed = std::max(0.001f, camera.speed / 1.25f);
+            ImGui::SameLine(0, spacing);
+            ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 2 * (buttonWidth + spacing));
+            ImGui::SliderFloat("##speed", &camera.speed, 0.0f, 3.0f, "%.3f");
+            ImGui::SameLine(0, spacing);
+            if (ImGui::Button("+##speed", ImVec2(buttonWidth, 0)))
+                camera.speed = std::min(3.0f, camera.speed * 1.25f);
+            ImGui::SameLine(0, spacing);
+            ImGui::Text("Speed");
+        }
         ImGui::Text("Background color");
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
         //ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
         ImGui::Checkbox("Use depth for point brightness", &camera.useDepthOnPointBrightness);
         ImGui::Checkbox("Use shadow", &camera.useShadow);
+
+        if (ImGui::CollapsingHeader("Orientation", ImGuiTreeNodeFlags_DefaultOpen)){
+            ImGui::Checkbox("Show axes", &showAxes);
+            ImGui::SliderFloat("Axis length", &axisLength, 0.1f, 100.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+            const char* axisNames[3] = {"X", "Y", "Z"};
+            for (int a = 0; a < 3; a++){
+                ImGui::PushID(a);
+                glm::vec3 axis(0.0f);
+                axis[a] = 1.0f;
+                float angle = 0.0f;
+                ImGui::Text("Rotate around %s", axisNames[a]);
+                ImGui::SameLine(130);
+                if (ImGui::Button("-90")) angle = -90.0f;
+                ImGui::SameLine();
+                if (ImGui::Button("+90")) angle = 90.0f;
+                if (angle != 0.0f){
+                    modelRotation = glm::rotate(glm::mat4(1.0f), glm::radians(angle), axis) * modelRotation;
+                    // 90 degree rotations only contain -1, 0 and 1: round away float drift
+                    for (int col = 0; col < 3; col++)
+                        for (int row = 0; row < 3; row++)
+                            modelRotation[col][row] = std::round(modelRotation[col][row]);
+                }
+                ImGui::PopID();
+            }
+            if (ImGui::Button("Reset rotation")) modelRotation = glm::mat4(1.0f);
+            ImGui::Separator();
+        }
+
         loadButtonPressed = ImGui::Button("Load");
         //show options for each cloud
         for (auto & c : clouds){
@@ -327,8 +391,18 @@ int main(int argc, char * argv[])
                 }
                 case 6:{
                     ImGui::SliderFloat("Split", &split, 0.0f, (float)width);
-                    ImGui::SliderFloat("Start distance", &startDist, c.min.position.y, c.max.position.y);
-                    ImGui::SliderFloat("End distance", &endDist, c.min.position.y, c.max.position.y);
+                    // height (z) range of the cloud after applying the model rotation
+                    float yMin = FLT_MAX, yMax = -FLT_MAX;
+                    for (int k = 0; k < 8; k++){
+                        glm::vec3 corner((k & 1) ? c.max.position.x : c.min.position.x,
+                                         (k & 2) ? c.max.position.y : c.min.position.y,
+                                         (k & 4) ? c.max.position.z : c.min.position.z);
+                        float y = (modelMatrix * glm::vec4(corner, 1.0f)).z;
+                        yMin = std::min(yMin, y);
+                        yMax = std::max(yMax, y);
+                    }
+                    ImGui::SliderFloat("Start distance", &startDist, yMin, yMax);
+                    ImGui::SliderFloat("End distance", &endDist, yMin, yMax);
                     
                     c.currentShader = &zmapShader;
                     break;
@@ -413,8 +487,6 @@ int main(int argc, char * argv[])
         ImGui::Text("%.1f", (float) posPathSelection);
 
         ImGui::End();
-        // Rendering
-        ImGui::Render();
         }
 
 
@@ -485,15 +557,16 @@ int main(int argc, char * argv[])
             if (ImGui::IsKeyDown(ImGuiKey_F)){
                 camera.down();
             }
-            //Arrow keys: look around (alternative to the mouse)
+            //Arrow keys: look around (alternative to the mouse), independent of the frame rate
+            float keyRot = camera.keyRotSpeed * ImGui::GetIO().DeltaTime;
             if (ImGui::IsKeyDown(ImGuiKey_LeftArrow))
-                camera.rotate(-camera.keyRotSpeed, 0.0f);
+                camera.rotate(-keyRot, 0.0f);
             if (ImGui::IsKeyDown(ImGuiKey_RightArrow))
-                camera.rotate(camera.keyRotSpeed, 0.0f);
+                camera.rotate(keyRot, 0.0f);
             if (ImGui::IsKeyDown(ImGuiKey_UpArrow))
-                camera.rotate(0.0f, camera.keyRotSpeed);
+                camera.rotate(0.0f, keyRot);
             if (ImGui::IsKeyDown(ImGuiKey_DownArrow))
-                camera.rotate(0.0f, -camera.keyRotSpeed);
+                camera.rotate(0.0f, -keyRot);
             if (ImGui::IsKeyDown(ImGuiKey_C)){// && posPath.back() != camera.Position){
                 if (posPath.size() == 0){
                     posPath.push_back(camera.Position);
@@ -677,12 +750,25 @@ int main(int argc, char * argv[])
 		glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(int), GL_UNSIGNED_INT, 0);
         */
 
+        // Pivot for the model rotation: center of the bounding box of all loaded clouds
+        if (!clouds.empty()){
+            glm::vec3 lo = clouds[0].min.position;
+            glm::vec3 hi = clouds[0].max.position;
+            for (auto & c : clouds){
+                lo = glm::min(lo, c.min.position);
+                hi = glm::max(hi, c.max.position);
+            }
+            modelCenter = (lo + hi) * 0.5f;
+        }
+        modelMatrix = glm::translate(glm::mat4(1.0f), modelCenter) * modelRotation * glm::translate(glm::mat4(1.0f), -modelCenter);
+
         for (auto & c : clouds){
             glPointSize(c.pointssize);
 
             c.currentShader->Activate();
 
             camera.Matrix(*c.currentShader, "camMatrix");
+            glUniformMatrix4fv(glGetUniformLocation(c.currentShader->ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
 
             switch (c.shaderType){
                 case 0:{
@@ -730,6 +816,38 @@ int main(int argc, char * argv[])
         
             c.Draw(camera);
         }
+
+        // Coordinate axes with labels (hidden while a tracking shot is replayed/recorded)
+        if (showAxes && currentReplayPosition < 0){
+            glm::mat4 axisModel = glm::translate(glm::mat4(1.0f), modelCenter) * glm::scale(glm::mat4(1.0f), glm::vec3(axisLength));
+            axisShader.Activate();
+            glUniformMatrix4fv(glGetUniformLocation(axisShader.ID, "camMatrix"), 1, GL_FALSE, glm::value_ptr(camera.cameraMatrix));
+            glUniformMatrix4fv(glGetUniformLocation(axisShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(axisModel));
+            glDisable(GL_DEPTH_TEST);   // always on top of the points
+            axisVAO.Bind();
+            glLineWidth(3.0f);
+            glDrawArrays(GL_LINES, 0, 6);
+            glLineWidth(1.0f);
+            axisVAO.Unbind();
+            glEnable(GL_DEPTH_TEST);
+
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+            ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+            const char* labels[3] = {"X", "Y", "Z"};
+            const ImU32 labelColors[3] = {IM_COL32(255, 60, 60, 255), IM_COL32(60, 255, 60, 255), IM_COL32(90, 140, 255, 255)};
+            for (int a = 0; a < 3; a++){
+                glm::vec3 tip = modelCenter;
+                tip[a] += axisLength * 1.1f;
+                glm::vec4 clip = camera.cameraMatrix * glm::vec4(tip, 1.0f);
+                if (clip.w <= 0.0f) continue;   // behind the camera
+                glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                ImVec2 p((ndc.x * 0.5f + 0.5f) * displaySize.x, (0.5f - ndc.y * 0.5f) * displaySize.y);
+                float fontSize = ImGui::GetFontSize() * 1.5f;
+                drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(p.x - fontSize * 0.25f, p.y - fontSize * 0.5f), labelColors[a], labels[a]);
+            }
+        }
+
+        ImGui::Render();
 
         // Don't draw the imGui stuff when the the tracking shot is beeing taken
         if (currentReplayPosition < 0){
