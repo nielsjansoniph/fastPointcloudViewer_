@@ -102,9 +102,16 @@ int main(int argc, char * argv[])
 
 
 
-    //std::cout << "Input args: " << std::endl;
-    for (int i=0;i<argc;i++){
-       std::cout << i << " : " << argv[i] << std::endl; 
+    // Command line: point cloud files to load at startup
+    std::vector<std::string> startupFiles;
+    for (int a = 1; a < argc; a++){
+        std::string arg = argv[a];
+        if (arg == "-h" || arg == "--help"){
+            std::cout << "Usage: " << argv[0] << " [cloud.ply|cloud.pcd ...]\n"
+                      << "Loads the given point clouds (.ply or .pcd) at startup.\n";
+            return 0;
+        }
+        startupFiles.push_back(arg);
     }
 
     glfwSetErrorCallback(glfw_error_callback);
@@ -242,6 +249,26 @@ int main(int argc, char * argv[])
     float cubeSize = 0.05f;   // edge length of the cubes in the cube shader (world units)
 
     cv::VideoWriter writer;
+
+    // Loads a point cloud (used by the Load button and the command line)
+    auto loadCloud = [&](const std::string& path){
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (!std::filesystem::is_regular_file(path)){
+            std::cerr << "File not found: " << path << std::endl;
+            return;
+        }
+        if (ext != ".ply" && ext != ".pcd"){
+            std::cerr << "Unsupported file type (only .ply and .pcd): " << path << std::endl;
+            return;
+        }
+        std::cout << "Loading " << path << std::endl;
+        clouds.push_back(Cloud(path));
+        clouds.back().currentShader = &monoColorShader;
+        clouds.back().shaderType = 1;
+    };
+    for (const auto& path : startupFiles)
+        loadCloud(path);
 
     // Model orientation: rotated in 90 degree steps around the center of the loaded clouds
     glm::mat4 modelRotation = glm::mat4(1.0f);
@@ -515,14 +542,8 @@ int main(int argc, char * argv[])
             nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
             if (result == NFD_OKAY)
             {
-                puts("File selected");
-                puts(outPath);
-                clouds.push_back(Cloud(outPath));
-                clouds[clouds.size()-1].currentShader = &monoColorShader;
-                clouds[clouds.size()-1].shaderType = 1;
+                loadCloud(outPath);
                 NFD_FreePathU8(outPath);
-                float startDist = clouds[clouds.size()-1].min.position.z;
-                float endDist = clouds[clouds.size()-1].max.position.z;
             }
             else if (result == NFD_CANCEL)
             {
