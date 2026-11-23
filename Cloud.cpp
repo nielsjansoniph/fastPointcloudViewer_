@@ -3,7 +3,7 @@
 
 Cloud::Cloud(std::vector <VertexPosCol>& vertices)
 {
-	Cloud::vertices = vertices;
+	numPoints = (GLsizei)vertices.size();
 
 	VAO.Bind();
 	// Generates Vertex Buffer Object and links it to vertices
@@ -20,53 +20,50 @@ Cloud::Cloud(std::vector <VertexPosCol>& vertices)
 
 
 Cloud::Cloud(const std::string filename){
-	pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
 	Cloud::filename = filename;
-	
-	std::filesystem::path p(filename);
-	//std::cout << p.extension() << std::endl;
-	if (p.extension().compare(".ply") == 0){
-		pcl::PLYReader Reader;
-		if (Reader.read(filename, *tmp)==-1)
-			42; //TODO
+
+	std::vector<VertexPos> positions;
+	{
+		// PCL cloud only lives in this scope, so its memory is freed before the upload finishes
+		pcl::PointCloud<pcl::PointXYZ> tmp;
+		std::string ext = std::filesystem::path(filename).extension().string();
+		for (auto& ch : ext) ch = (char)std::tolower((unsigned char)ch);
+
+		int result = -1;
+		if (ext == ".ply"){
+			pcl::PLYReader reader;
+			result = reader.read(filename, tmp);
+		}
+		else if (ext == ".pcd"){
+			pcl::PCDReader reader;
+			result = reader.read(filename, tmp);
+		}
+		else
+			throw std::runtime_error("unsupported file type: " + filename);
+
+		if (result < 0)
+			throw std::runtime_error("could not read " + filename);
+		if (tmp.points.empty())
+			throw std::runtime_error("no points in " + filename);
+
+		pcl::PointXYZ minPt, maxPt;
+		pcl::getMinMax3D(tmp, minPt, maxPt);
+		min.position = glm::vec3(minPt.x, minPt.y, minPt.z);
+		max.position = glm::vec3(maxPt.x, maxPt.y, maxPt.z);
+
+		// Positions only (12 bytes/point); the shaders do not use a per-point color
+		positions.resize(tmp.points.size());
+		for (size_t i = 0; i < tmp.points.size(); i++)
+			positions[i].position = glm::vec3(tmp.points[i].x, tmp.points[i].y, tmp.points[i].z);
 	}
-		
-	if (p.extension().compare(".pcd") == 0){
-		pcl::PCDReader Reader;
-		if (Reader.read(filename, *tmp) == -1)
-			42; //TODO error handling
-	}
-    
-	pcl::PointXYZ minPt, maxPt;
-    pcl::getMinMax3D(*tmp, minPt, maxPt);
-	min.position.x = minPt.x; min.position.y = minPt.y; min.position.z = minPt.z;
-	max.position.x = maxPt.x; max.position.y = maxPt.y; max.position.z = maxPt.z;
-
-	int n = tmp->points.size();
-    std::vector<VertexPosCol> vertices;
-    VertexPosCol vertex;
-
-    for (int i=0; i<n; i++){
-        vertex.position[0] = tmp->points[i].x;
-        vertex.position[1] = tmp->points[i].y;
-        vertex.position[2] = tmp->points[i].z;
-        vertex.color[0] = 1.0f; //(coordx[i] - *mmx.first) / (*mmx.second - *mmx.first)/2.0f;
-        vertex.color[1] = 1.0f; //(coordy[i] - *mmy.first) / (*mmy.second - *mmy.first)/2.0f;
-        vertex.color[2] = 1.0f;
-        vertices.push_back(vertex);
-    }
-
-	Cloud::vertices = vertices;
+	numPoints = (GLsizei)positions.size();
 
 	VAO.Bind();
-	// Generates Vertex Buffer Object and links it to vertices
-	VBO VBO(vertices);
-	// Links VBO attributes such as coordinates and colors to VAO
-    VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(VertexPosCol), (void*)0);
-    VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(VertexPosCol), (void*)sizeof(VertexPosCol));
-    // Unbind all to prevent accidentally modifying them
+	VBO VBO(positions);
+	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(VertexPos), (void*)0);
 	VAO.Unbind();
 	VBO.Unbind();
+	// positions goes out of scope here: the data is kept on the GPU only
 }
 
 
@@ -85,7 +82,7 @@ void Cloud::Draw(Camera& camera)
     camera.Matrix(*currentShader, "camMatrix");
 
 	// Draw the actual mesh
-	glDrawArrays(GL_POINTS, 0, vertices.size());
+	glDrawArrays(GL_POINTS, 0, numPoints);
 	//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }
 
@@ -104,6 +101,6 @@ void Cloud::DrawElements(Camera& camera)
     camera.Matrix(*currentShader, "camMatrix");
 
 	// Draw the actual mesh
-	glDrawArrays(GL_POINTS, 0, vertices.size());
+	glDrawArrays(GL_POINTS, 0, numPoints);
 	//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }

@@ -41,7 +41,7 @@ cd build/linux && ./fpcv [wolke.ply|wolke.pcd ...]      # MUSS aus build/linux g
 |---|---|
 | `main.cpp` | Fast alles: Init, Shader-Erzeugung, ImGui-Menü, Hauptschleife, Rendering, Kamerafahrten/Videoaufnahme (OpenCV) |
 | `Camera.*` | Position/Orientierung, **Z ist oben** (`Up = (0,0,1)`), WASD/RF-Bewegung (m/s × Frame-Zeit), Mausrotation, `rotate()` für Pfeiltasten, setzt gemeinsame Uniforms (`camMatrix`, `near`, `far`, `cameraPosition`, …) |
-| `Cloud.*` | Lädt .ply/.pcd über PCL, hält Vertices, Bounding Box (`min`/`max`), VAO, `shaderType`, `pointssize` |
+| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error` bei Fehlern), lädt nur Positionen (12 Byte/Punkt) auf die GPU und behält keine Punktdaten im RAM; hält `numPoints`, Bounding Box (`min`/`max`), VAO, `shaderType`, `pointssize` |
 | `shaderClass.*`, `VAO/VBO/EBO.*` | Dünne OpenGL-Wrapper |
 | `Mesh.*`, `Texture.*`, `mesh*`, `light*`, `meshTexShader*` | Mesh-Rendering, derzeit auskommentiert/ungenutzt |
 | `happly.h`, `stb_image.h` | Eingebundene Header-Bibliotheken – nicht anfassen |

@@ -16,12 +16,14 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <filesystem>
 #include <iostream>
+#include <stdexcept>
 
 
 class Cloud
 {
 public:
-	std::vector<VertexPosCol> vertices;
+	// Number of points; the point data itself lives only on the GPU
+	GLsizei numPoints = 0;
 	VertexPosCol min;
 	VertexPosCol max;
 	// Store VAO in public so it can be used in the Draw function
@@ -30,7 +32,7 @@ public:
 	// Initializes the mesh
 	Cloud(std::vector<VertexPosCol>& vertices);
 
-	// Initializes with filename to read
+	// Initializes with filename to read (.ply or .pcd); throws std::runtime_error on failure
 	Cloud(const std::string filename);
 
 	// Draws the mesh

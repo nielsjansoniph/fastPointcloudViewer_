@@ -250,6 +250,7 @@ int main(int argc, char * argv[])
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
 
     cv::VideoWriter writer;
+    cv::Size recordSize(width, height);
 
     // Loads a point cloud (used by the Load button and the command line)
     auto loadCloud = [&](const std::string& path){
@@ -264,9 +265,16 @@ int main(int argc, char * argv[])
             return;
         }
         std::cout << "Loading " << path << std::endl;
-        clouds.push_back(Cloud(path));
+        try {
+            clouds.push_back(Cloud(path));
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error loading point cloud: " << e.what() << std::endl;
+            return;
+        }
         clouds.back().currentShader = &monoColorShader;
         clouds.back().shaderType = 1;
+        std::cout << "Loaded " << clouds.back().numPoints << " points" << std::endl;
     };
     for (const auto& path : startupFiles)
         loadCloud(path);
@@ -315,7 +323,6 @@ int main(int argc, char * argv[])
 
         int i=0;
         static unsigned int nscreenshots = 0;
-        static GLubyte *pixels = nullptr;
         static const GLenum FORMAT = GL_RGBA;
         static const GLuint FORMAT_NBYTES = 4;
         static bool loop = true;
@@ -570,6 +577,15 @@ int main(int argc, char * argv[])
         //update window size
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
+        // camera uses the window size for the aspect ratio and for centering the mouse
+        {
+            int win_w, win_h;
+            glfwGetWindowSize(window, &win_w, &win_h);
+            if (win_w > 0 && win_h > 0){
+                camera.width = win_w;
+                camera.height = win_h;
+            }
+        }
         //clear window
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
@@ -652,6 +668,8 @@ int main(int argc, char * argv[])
             if (wayPointUp >= 1){
                 iter_swap(posPath.begin() + wayPointUp,
                           posPath.begin() + wayPointUp - 1);
+                iter_swap(oriPath.begin() + wayPointUp,
+                          oriPath.begin() + wayPointUp - 1);
             }
             //reset the flag
             wayPointUp = -1;
@@ -662,6 +680,8 @@ int main(int argc, char * argv[])
             if (wayPointDown < posPath.size()-1){
                 iter_swap(posPath.begin() + wayPointDown,
                 posPath.begin() + wayPointDown + 1);
+                iter_swap(oriPath.begin() + wayPointDown,
+                oriPath.begin() + wayPointDown + 1);
             }
             //reset the flag
             wayPointDown = -1;
@@ -672,7 +692,8 @@ int main(int argc, char * argv[])
         int replayEnd = posPath.size() - 1;
         
         if (replayToEndButtonPressed || replayNextButtonPressed){
-            replayStart = posPathSelection;
+            // no (valid) selection: start at the first waypoint
+            replayStart = (posPathSelection >= 0 && posPathSelection <= replayEnd) ? posPathSelection : 0;
         }
         if (replayNextButtonPressed && replayStart < replayEnd){
             replayEnd = replayStart + 1;
@@ -687,7 +708,6 @@ int main(int argc, char * argv[])
             
 
             //init and malloc variables
-            pixels = (GLubyte*) malloc(FORMAT_NBYTES * width * height);
             int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
             double fps = 25.0;
             time_t timestamp;
@@ -695,65 +715,53 @@ int main(int argc, char * argv[])
             struct tm* datetime;
             time(&timestamp);
             datetime = localtime(&timestamp);
-            strftime(output, 50, "%Y_%M_%d_%H_%M_%S", datetime);
+            strftime(output, 50, "%Y_%m_%d_%H_%M_%S", datetime);
             std::string buffer(output);
             std::string filename = "../../records/record_" + buffer + ".avi";
-            cv::Size sz(width, height);
+            // record with the current framebuffer size (the window may have been resized)
+            recordSize = cv::Size(display_w, display_h);
             if (record){
-            //try to open the videowriter and catch an error
-                writer.open(filename, codec, fps, sz, true);
+                std::error_code ec;
+                std::filesystem::create_directories("../../records", ec);
+                //try to open the videowriter; on failure replay without recording
+                writer.open(filename, codec, fps, recordSize, true);
                 if (!writer.isOpened()) {
-                    std::cerr << "Could not open the output video file for write\n";
-                    return -1;
+                    std::cerr << "Could not open the output video file for write: " << filename << std::endl;
+                    record = false;
                 }
+                else
+                    std::cout << "Recording to " << filename << std::endl;
             }
             
-            float framePathDist = 0.1;
+            // Interpolate between waypoints: at most framePathDist meters and frameAngleDeg degrees per frame
+            const float framePathDist = 0.1f;
+            const float frameAngleDeg = 2.0f;
             posPathInterpolated.clear();
             oriPathInterpolated.clear();
-            for (int i=replayStart; i<replayEnd; i++){
-                glm::vec3 diff = posPath[i+1] - posPath[i];
-                float pathDist = glm::length(diff);
-                glm::vec3 dir = glm::normalize(diff);
-                int interpolatesteps = ceil(pathDist / framePathDist);
-                float interpolateDistance = pathDist / interpolatesteps;
-                glm::vec3 interpolateStep = dir * interpolateDistance;
-
-                
-                for (int ip = 0; ip < interpolatesteps; ip++){
-                    posPathInterpolated.push_back(posPath[i] + interpolateStep * (float) ip);
+            auto appendSegment = [&](const glm::vec3& p0, const glm::vec3& o0, const glm::vec3& p1, const glm::vec3& o1){
+                glm::vec3 n0 = glm::normalize(o0);
+                glm::vec3 n1 = glm::normalize(o1);
+                float angleDeg = glm::degrees(std::acos(glm::clamp(glm::dot(n0, n1), -1.0f, 1.0f)));
+                int steps = std::max({1,
+                                      (int)std::ceil(glm::length(p1 - p0) / framePathDist),
+                                      (int)std::ceil(angleDeg / frameAngleDeg)});
+                for (int ip = 0; ip < steps; ip++){
+                    float t = (float)ip / steps;
+                    posPathInterpolated.push_back(glm::mix(p0, p1, t));
+                    glm::vec3 o = glm::mix(n0, n1, t);
+                    // opposite directions would give a zero vector halfway: keep the previous one
+                    oriPathInterpolated.push_back(glm::length(o) > 1e-4f ? glm::normalize(o) : n0);
                 }
-                diff = oriPath[i+1] - oriPath[i];
-                pathDist = glm::length(diff);
-                dir = glm::normalize(diff);
-                interpolateDistance = pathDist / interpolatesteps;
-                interpolateStep = dir * interpolateDistance;
-                for (int ip=0; ip < interpolatesteps; ip++){
-                    oriPathInterpolated.push_back(oriPath[i] + interpolateStep * (float) ip);
-
-                }
+            };
+            for (int i=replayStart; i<replayEnd; i++)
+                appendSegment(posPath[i], oriPath[i], posPath[i+1], oriPath[i+1]);
+            if (loop)
+                appendSegment(posPath.back(), oriPath.back(), posPath.front(), oriPath.front());
+            else{
+                // also show the last waypoint itself
+                posPathInterpolated.push_back(posPath[replayEnd]);
+                oriPathInterpolated.push_back(glm::normalize(oriPath[replayEnd]));
             }
-            if (loop){
-                glm::vec3 diff = posPath[0] - posPath[posPath.size()-1];
-                float pathDist = glm::length(diff);
-                glm::vec3 dir = glm::normalize(diff);
-                int interpolatesteps = ceil(pathDist / framePathDist);
-                float interpolateDistance = pathDist / interpolatesteps;
-                glm::vec3 interpolateStep = dir * interpolateDistance;
-                for (int ip = 0; ip < interpolatesteps; ip++){
-                    posPathInterpolated.push_back(posPath[posPath.size()-1] + interpolateStep * (float) ip);
-                }
-                diff = oriPath[0] - oriPath[oriPath.size()-1];
-                pathDist = glm::length(diff);
-                dir = glm::normalize(diff);
-                interpolateDistance = pathDist / interpolatesteps;
-                interpolateStep = dir * interpolateDistance;
-                for (int ip=0; ip < interpolatesteps; ip++){
-                    oriPathInterpolated.push_back(oriPath[oriPath.size()-1] + interpolateStep * (float) ip);
-
-                }
-            }
-            
 
         }
         else{
@@ -917,7 +925,7 @@ int main(int argc, char * argv[])
 
         if (currentReplayPosition != -1 && record){
             //glReadPixels(0, 0, width, height, FORMAT, GL_UNSIGNED_BYTE, pixels);
-            frame.create(height, width, CV_8UC3);
+            frame.create(recordSize.height, recordSize.width, CV_8UC3);
 
             glPixelStorei(GL_PACK_ALIGNMENT, (frame.step & 3) ? 1 : 4);
             glPixelStorei(GL_PACK_ROW_LENGTH, frame.step/frame.elemSize());
