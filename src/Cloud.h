@@ -17,6 +17,7 @@ public:
 
 	std::string filename;
 	GLsizei numPoints = 0;
+	bool hasColor = false;             // file contains rgb(a) colors (uploaded as vertex attribute 1)
 	glm::vec3 min = glm::vec3(0.0f);   // bounding box in file coordinates
 	glm::vec3 max = glm::vec3(0.0f);
 

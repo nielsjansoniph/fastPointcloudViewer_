@@ -131,5 +131,15 @@ std::vector<PointShader> createPointShaders()
             setRaycastUniforms(s, "sphereSize", c, ctx);
         }});
 
+    // 7: colors from the file (default for clouds with colors)
+    shaders.push_back({"RGB", load("rgb.vert", "rgb.frag"), false,
+        [](Cloud& c, ShaderSettings&, const glm::mat4&){
+            if (!c.hasColor)
+                ImGui::TextDisabled("File has no colors - shown white");
+            ImGui::TextDisabled("Shading: \"Use shadow\" above");
+        },
+        [](const Shader&, const Cloud&, const ShaderSettings&, const RenderContext&){
+        }});
+
     return shaders;
 }

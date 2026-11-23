@@ -48,7 +48,7 @@ cmake --build build/linux -j
 | `CameraPath.*` | Wegpunkte, Interpolation (Strecke + Winkel), Replay, Videoaufnahme (OpenCV, MJPG) |
 | `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
 | `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
-| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error`), nur Positionen (12 Byte/Punkt) auf die GPU, keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
+| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error`): einmal als `PCLPointCloud2` lesen, bei Feld `rgb`/`rgba` → `PointXYZRGBA`, sonst `PointXYZ`. GPU: Positionen 12 Byte/Punkt (Attribut 0), Farben 4 Byte/Punkt (Attribut 1, nur bei `hasColor`), keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
 | `Shader.*` | Shader-Programm; löst `#include "datei.glsl"` in Shader-Dateien auf |
 | `VAO.*`, `VBO.*` | Dünne OpenGL-Wrapper |
 | `Paths.h`, `UiWidgets.h` | Laufzeitpfade; `SliderFloatWithButtons` (Regler mit −/+) |
@@ -71,6 +71,7 @@ cmake --build build/linux -j
 | 4 | Debug | `points.vert` + `debug.frag` | geteilte Ansicht (`split`) |
 | 5 | zMap | `points.vert` + `zmap.frag` | Farbe nach Höhe **z** |
 | 6 | Sphere | `sphere.vert` + `sphere.frag` | Raycast Kugel |
+| 7 | RGB | `rgb.vert` + `rgb.frag` | Farben aus der Datei, Standard für Wolken mit Farben (`kColorPointShader`) |
 | – | Achsen | `axis.vert` + `axis.frag` | Koordinatenkreuz |
 
 - `common.glsl`: gemeinsame Uniforms (`near`, `far`, `useDepthOn…`, `useShadow`, `cameraPosition`)

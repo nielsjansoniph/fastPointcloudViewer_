@@ -20,6 +20,7 @@ public:
 
 	VBO(const std::vector<VertexPos>& vertices);
 	VBO(const std::vector<VertexPosCol>& vertices);
+	VBO(const void* data, GLsizeiptr bytes);
 
 	void Bind();
 	void Unbind();

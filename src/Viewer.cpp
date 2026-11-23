@@ -48,8 +48,9 @@ bool Viewer::loadCloud(const std::string& path)
         std::cerr << "Error loading point cloud: " << e.what() << std::endl;
         return false;
     }
-    clouds.back().shaderType = kDefaultPointShader;
-    std::cout << "Loaded " << clouds.back().numPoints << " points" << std::endl;
+    Cloud& cloud = clouds.back();
+    cloud.shaderType = cloud.hasColor ? kColorPointShader : kDefaultPointShader;
+    std::cout << "Loaded " << cloud.numPoints << " points" << (cloud.hasColor ? " with colors" : "") << std::endl;
     return true;
 }
 

@@ -45,8 +45,9 @@ struct PointShader
     std::function<void(const Shader&, const Cloud&, const ShaderSettings&, const RenderContext&)> setUniforms;
 };
 
-// Index of the shader new clouds start with (Monocolor)
+// Index of the shader new clouds start with: Monocolor, or RGB if the file has colors
 constexpr int kDefaultPointShader = 1;
+constexpr int kColorPointShader = 7;
 
 // Compiles all point shaders (needs a current OpenGL context)
 std::vector<PointShader> createPointShaders();

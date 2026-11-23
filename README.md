@@ -72,6 +72,7 @@ Die Tastatur wirkt nur, solange der Mauszeiger nicht über dem Menü steht.
   - *Sphere*: jeder Punkt als Kugel mit denselben Richtungsfarben, stufenlos; Durchmesser = PointSize in cm
   - *ColorGradient*, *Debug*: Farbverläufe nach Entfernung
   - *zMap*: Farbe nach Höhe (Z)
+  - *RGB*: Farben aus der Datei (falls vorhanden; solche Wolken starten automatisch damit), runde Punkte, mit „Use shadow“ kugelartig schattiert
 - **Replay / Wegpunkt-Tabelle**: aufgenommene Wegpunkte abfahren, optional als Schleife und als
   Video aufzeichnen (MJPG-`.avi` mit 25 Bildern/s im Ordner `records/` des Projekts);
   Wegpunkte auswählen, löschen, verschieben.
