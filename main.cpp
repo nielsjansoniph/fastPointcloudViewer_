@@ -64,6 +64,32 @@ const unsigned int width = 1600;
 const unsigned int height = 900;
  
 
+// Slider with -/+ buttons left and right; each click divides/multiplies the value by `factor`
+static bool SliderFloatWithButtons(const char* label, float* v, float vMin, float vMax, float factor = 1.25f, const char* format = "%.3f")
+{
+    ImGui::PushID(label);
+    bool changed = false;
+    float buttonWidth = ImGui::GetFrameHeight();
+    float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    float clickMin = vMin > 0.0f ? vMin : 0.001f;   // keep clicking from getting stuck at 0
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0))){
+        *v = std::max(clickMin, *v / factor);
+        changed = true;
+    }
+    ImGui::SameLine(0, spacing);
+    ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 2 * (buttonWidth + spacing));
+    changed |= ImGui::SliderFloat("##slider", v, vMin, vMax, format);
+    ImGui::SameLine(0, spacing);
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0))){
+        *v = std::min(vMax, std::max(clickMin, *v) * factor);
+        changed = true;
+    }
+    ImGui::SameLine(0, spacing);
+    ImGui::TextUnformatted(label);
+    ImGui::PopID();
+    return changed;
+}
+
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -136,7 +162,7 @@ int main(int argc, char * argv[])
     std::cout << "Compiling rgbSphereShader" << std::endl;
     Shader rgbSphereShader("../../default.vert", "../../rgbSphere.frag");
     std::cout << "Compiling cubeShader" << std::endl;
-    Shader cubeShader("../../default.vert", "../../cube.frag");
+    Shader cubeShader("../../cube.vert", "../../cube.frag");
     std::cout << "Compiling meshShader" << std::endl;
     Shader meshShader("../../mesh.vert", "../../mesh.frag");
     
@@ -213,6 +239,7 @@ int main(int argc, char * argv[])
     int res = 1080;
     glm::vec3 startColor = glm::vec3(0.5, 1, 0.5);
     glm::vec3 endColor = glm::vec3(0.0, 0.0, 0.4);
+    float cubeSize = 0.05f;   // edge length of the cubes in the cube shader (world units)
 
     cv::VideoWriter writer;
 
@@ -278,23 +305,9 @@ int main(int argc, char * argv[])
 
         // Create a window called "Hello, world!" and append into it.
         ImGui::Begin("Viewer settings");                     
-        ImGui::SliderFloat("Near", &camera.nearDist, 0.0f, 1.0f);
-        ImGui::SliderFloat("Far", &camera.farDist, 0.0f, 100.0f);
-        // Speed: slider with -/+ buttons (each click changes the speed by a factor of 1.25)
-        {
-            float buttonWidth = ImGui::GetFrameHeight();
-            float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-            if (ImGui::Button("-##speed", ImVec2(buttonWidth, 0)))
-                camera.speed = std::max(0.001f, camera.speed / 1.25f);
-            ImGui::SameLine(0, spacing);
-            ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 2 * (buttonWidth + spacing));
-            ImGui::SliderFloat("##speed", &camera.speed, 0.0f, 3.0f, "%.3f");
-            ImGui::SameLine(0, spacing);
-            if (ImGui::Button("+##speed", ImVec2(buttonWidth, 0)))
-                camera.speed = std::min(3.0f, camera.speed * 1.25f);
-            ImGui::SameLine(0, spacing);
-            ImGui::Text("Speed");
-        }
+        SliderFloatWithButtons("Near", &camera.nearDist, 0.0f, 1.0f);
+        SliderFloatWithButtons("Far", &camera.farDist, 0.0f, 100.0f);
+        SliderFloatWithButtons("Speed", &camera.speed, 0.0f, 3.0f);
         ImGui::Text("Background color");
         ImGui::ColorEdit3("", (float*)&clear_color); // Edit 3 floats representing a color
         //ImGui::Checkbox("Use depth for pointsize", &camera.useDepthOnPointsize);
@@ -340,7 +353,7 @@ int main(int argc, char * argv[])
             
 
             //ImGui::RadioButton("RGB sphere shader", &c.shaderType, 2); ImGui::SameLine();
-            //ImGui::RadioButton("Cube shader", &c.shaderType, 3); 
+            ImGui::RadioButton("Cube shader", &c.shaderType, 3);
             ImGui::RadioButton("ColorGradient shader", &c.shaderType, 4);
             ImGui::RadioButton("debug shader", &c.shaderType, 5);
             ImGui::RadioButton("zMap Shader", &c.shaderType, 6);
@@ -362,7 +375,8 @@ int main(int argc, char * argv[])
                     break;
                 }
                 case 3:{
-                    //c.currentShader = &cubeShader;
+                    ImGui::SliderFloat("Cube size", &cubeSize, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+                    c.currentShader = &cubeShader;
                     break;
                 }
                 case 4:{
@@ -781,6 +795,17 @@ int main(int argc, char * argv[])
                     glUniform3fv(id, 1, glm::value_ptr(c.point_color));
                     break;
                 }
+                case 3:{
+                    // sprite size is computed per point in cube.vert
+                    glEnable(GL_PROGRAM_POINT_SIZE);
+                    glm::mat4 invCam = glm::inverse(camera.cameraMatrix);
+                    float projScale = (float)display_h / std::tan(glm::radians(45.0f) / 2.0f);
+                    glUniform1f(glGetUniformLocation(cubeShader.ID, "cubeSize"), cubeSize);
+                    glUniform1f(glGetUniformLocation(cubeShader.ID, "projScale"), projScale);
+                    glUniform2f(glGetUniformLocation(cubeShader.ID, "viewportSize"), (float)display_w, (float)display_h);
+                    glUniformMatrix4fv(glGetUniformLocation(cubeShader.ID, "invCamMatrix"), 1, GL_FALSE, glm::value_ptr(invCam));
+                    break;
+                }
                 case 4:{
                     GLuint id = glGetUniformLocation(colorGradientShader.ID, "cFactor");
                     glUniform1f(id, cFactor);
@@ -815,6 +840,7 @@ int main(int argc, char * argv[])
             }
         
             c.Draw(camera);
+            glDisable(GL_PROGRAM_POINT_SIZE);
         }
 
         // Coordinate axes with labels (hidden while a tracking shot is replayed/recorded)
