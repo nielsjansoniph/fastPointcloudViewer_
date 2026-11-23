@@ -76,6 +76,14 @@ void Camera::down(){
 	Position += speed * -Up;
 }
 
+void Camera::rotate(float yawDeg, float pitchDeg){
+	// Same limits as mouse look: keep pitch within +-85 degrees
+	glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(pitchDeg), glm::normalize(glm::cross(Orientation, Up)));
+	if (abs(glm::angle(newOrientation, Up) - glm::radians(90.0f)) <= glm::radians(85.0f))
+		Orientation = newOrientation;
+	Orientation = glm::rotate(Orientation, glm::radians(-yawDeg), Up);
+}
+
 void Camera::Inputs(GLFWwindow* window)
 {
 

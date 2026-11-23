@@ -39,6 +39,8 @@ public:
 	// Adjust the speed of the camera and it's sensitivity when looking around
 	float speed = 0.1f;
 	float sensitivity = 100.0f;
+	// Rotation per frame in degrees when looking around with the arrow keys
+	float keyRotSpeed = 1.5f;
 
 
 
@@ -51,6 +53,8 @@ public:
     void right();
     void up();
     void down();
+    // Rotates the view: yaw (left/right) and pitch (up/down) in degrees
+    void rotate(float yawDeg, float pitchDeg);
 
 	// Updates the camera matrix to the Vertex Shader
 	void updateMatrix(float FOVdeg, float nearPlane, float farPlane);

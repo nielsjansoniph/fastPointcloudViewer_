@@ -467,25 +467,34 @@ int main(int argc, char * argv[])
         if (!ImGui::GetIO().WantCaptureMouse){
 
         //Keyboard movement handling
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_W))
+            if (ImGui::IsKeyDown(ImGuiKey_W))
                 camera.forward();
             
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_A))
+            if (ImGui::IsKeyDown(ImGuiKey_A))
                 camera.left();
 
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_S))
+            if (ImGui::IsKeyDown(ImGuiKey_S))
                 camera.backward();
 
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_D))
+            if (ImGui::IsKeyDown(ImGuiKey_D))
                 camera.right();
 
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_R)){
+            if (ImGui::IsKeyDown(ImGuiKey_R)){
                 camera.up();
             }
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_F)){
+            if (ImGui::IsKeyDown(ImGuiKey_F)){
                 camera.down();
             }
-            if (ImGui::IsKeyDown((ImGuiKey)GLFW_KEY_C)){// && posPath.back() != camera.Position){
+            //Arrow keys: look around (alternative to the mouse)
+            if (ImGui::IsKeyDown(ImGuiKey_LeftArrow))
+                camera.rotate(-camera.keyRotSpeed, 0.0f);
+            if (ImGui::IsKeyDown(ImGuiKey_RightArrow))
+                camera.rotate(camera.keyRotSpeed, 0.0f);
+            if (ImGui::IsKeyDown(ImGuiKey_UpArrow))
+                camera.rotate(0.0f, camera.keyRotSpeed);
+            if (ImGui::IsKeyDown(ImGuiKey_DownArrow))
+                camera.rotate(0.0f, -camera.keyRotSpeed);
+            if (ImGui::IsKeyDown(ImGuiKey_C)){// && posPath.back() != camera.Position){
                 if (posPath.size() == 0){
                     posPath.push_back(camera.Position);
                     oriPath.push_back(camera.Orientation);
