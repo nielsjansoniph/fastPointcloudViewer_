@@ -25,7 +25,7 @@ public:
 	VertexPosCol min;
 	VertexPosCol max;
 	// Store VAO in public so it can be used in the Draw function
-	VAO VAO;
+	::VAO VAO;
 
 	// Initializes the mesh
 	Cloud(std::vector<VertexPosCol>& vertices);

@@ -15,7 +15,7 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
-#include <imgui_impl_opengl3_loader.h>
+//#include <imgui_impl_opengl3_loader.h> // internal ImGui header, clashes with glad
 
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include <glm/glm.hpp>
@@ -593,6 +593,8 @@ int main(int argc, char * argv[])
                 int interpolatesteps = ceil(pathDist / framePathDist);
                 float interpolateDistance = pathDist / interpolatesteps;
                 glm::vec3 interpolateStep = dir * interpolateDistance;
+
+                
                 for (int ip = 0; ip < interpolatesteps; ip++){
                     posPathInterpolated.push_back(posPath[i] + interpolateStep * (float) ip);
                 }
