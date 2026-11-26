@@ -41,6 +41,11 @@ einkompilierten Projektpfad (`shaders/`, abweichend per Umgebungsvariable `FPCV_
 ./build/linux/fpcv --help
 ```
 
+Auf Laptops mit zwei Grafikkarten (NVIDIA Optimus/PRIME) nutzt das Programm automatisch die
+NVIDIA-Karte – der Unterschied ist groß (102 Mio. Punkte: 2,4 statt 35 Bilder/s). Die
+Konsole zeigt beim Start `OpenGL renderer: …`. Mit `FPCV_INTEGRATED_GPU=1` bleibt es bei der
+integrierten Grafik.
+
 ## Projektstruktur
 
 - `src/` – C++-Quellen (`main.cpp` Einstieg, `Viewer` Anwendung, `PointShaders` Tabelle aller Shader,

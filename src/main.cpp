@@ -1,5 +1,7 @@
 // Fast first person point cloud viewer – entry point: command line, window and ImGui setup, main loop.
 // The viewer itself is in Viewer.cpp.
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -12,6 +14,31 @@
 #include <nfd.h>
 
 #include "Viewer.h"
+
+#ifdef _WIN32
+// Laptops with two GPUs: ask the NVIDIA / AMD driver for the dedicated GPU
+extern "C" {
+__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
+
+// Linux laptops with NVIDIA PRIME render on the integrated GPU unless asked otherwise
+// (102 M points: 2.4 fps on Intel UHD vs. 35 fps on an RTX 4080). Must run before glfwInit,
+// which loads the OpenGL library. Skipped if no NVIDIA driver is loaded, if the user chose
+// a vendor already, or with FPCV_INTEGRATED_GPU=1.
+static void preferDedicatedGpu()
+{
+#ifndef _WIN32
+    if (std::getenv("FPCV_INTEGRATED_GPU") || std::getenv("__GLX_VENDOR_LIBRARY_NAME"))
+        return;
+    std::error_code ec;
+    if (!std::filesystem::exists("/proc/driver/nvidia/version", ec))
+        return;
+    setenv("__NV_PRIME_RENDER_OFFLOAD", "1", 0);
+    setenv("__GLX_VENDOR_LIBRARY_NAME", "nvidia", 0);
+#endif
+}
 
 static void glfwErrorCallback(int error, const char* description)
 {
@@ -32,6 +59,7 @@ int main(int argc, char* argv[])
         startupFiles.push_back(arg);
     }
 
+    preferDedicatedGpu();
     glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit())
         return 1;
@@ -48,6 +76,7 @@ int main(int argc, char* argv[])
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);   // vsync
     gladLoadGL();
+    std::cout << "OpenGL renderer: " << (const char*)glGetString(GL_RENDERER) << std::endl;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

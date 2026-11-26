@@ -96,6 +96,11 @@ cmake --build build/linux -j
 - **GCC**: Member mit gleichem Namen wie sein Typ (`VAO VAO;`) muss als `::VAO VAO;` geschrieben werden.
 - `<glad/glad.h>` immer vor `<GLFW/glfw3.h>` einbinden; `imgui_impl_opengl3_loader.h` nie einbinden.
 - Bewegungen/Rotationen mit `ImGui::GetIO().DeltaTime` skalieren – das Programm läuft mit ~120–240 FPS.
+- **Laptop mit Intel + NVIDIA (PRIME on-demand)**: OpenGL lief standardmäßig auf der Intel-Grafik
+  (102 Mio. Punkte: 2,4 statt 35 Bilder/s). `preferDedicatedGpu()` in `main.cpp` setzt vor
+  `glfwInit` `__NV_PRIME_RENDER_OFFLOAD`/`__GLX_VENDOR_LIBRARY_NAME`, wenn `/proc/driver/nvidia`
+  existiert; Windows: exportierte `NvOptimusEnablement`/`AmdPowerXpressRequestHighPerformance`.
+  Konsole zeigt `OpenGL renderer: …`; `FPCV_INTEGRATED_GPU=1` schaltet das ab.
 
 ## Git / Dateisystem
 
