@@ -16,12 +16,13 @@ cmake --build build/linux -j
   einkompiliert, siehe `src/Paths.h`; überschreibbar mit Umgebungsvariable `FPCV_SHADER_DIR`).
   Shader-Änderungen brauchen keinen Rebuild, nur einen Neustart. Videos landen in `<Projekt>/records/`.
 - Neue `.cpp`-Dateien in `CMakeLists.txt` (`add_executable`) eintragen.
-- Echte Testdaten: `../Punktwolken/jurgensen_merged.ply` (6,8 Mio. Punkte, relativ zum Projektordner).
-  `Riegl_BMW-Werk_Regensburg_e57_blurred.pcd` ist unter Linux nur Nullbytes (OneDrive-Platzhalter).
+- Echte Testdaten: `jurgensen_merged.ply` (6,8 Mio. Punkte) liegt im OneDrive-Ordner `Punktwolken`,
+  der von Linux aus derzeit nicht erreichbar ist. Ist keine Testwolke verfügbar, den Nutzer nach
+  einem Pfad fragen (nicht breit suchen).
 - Es gibt keine automatisierten Tests. Prüfen = bauen, starten, Konsole auf
   `SHADER_COMPILATION_ERROR` prüfen, Screenshot ansehen:
   ```bash
-  (./build/linux/fpcv ../Punktwolken/jurgensen_merged.ply > log.txt 2>&1 &); sleep 7
+  (./build/linux/fpcv /pfad/zu/wolke.ply > log.txt 2>&1 &); sleep 7
   WID=$(xwininfo -root -tree | grep "Fast first person" | awk '{print $1}' | head -1)
   import -window "$WID" shot.png; pkill -x fpcv          # NICHT pkill -f (trifft die eigene Shell)
   ```
@@ -96,12 +97,9 @@ cmake --build build/linux -j
 
 ## Git / Dateisystem
 
-- Projekt liegt auf einem **NTFS-Laufwerk in OneDrive**, das Windows und Linux gemeinsam nutzen.
-  Ältere Dateien haben CRLF, neue LF; das Repo speichert LF (`.gitattributes`: `* text=auto`).
-  `git diff` kann ganze Dateien als geändert zeigen (liest die CRLF-Arbeitskopie); maßgeblich ist
-  `git diff --numstat` bzw. `git diff -w`.
-- Fehler „Unzureichende Berechtigung … .git/objects“: NTFS-Schreibschutz auf Objekt-Ordnern →
-  `find .git -type d ! -writable -exec chmod u+w {} +`.
+- Linux-Arbeitskopie: `/home/niels/fastPointcloudViewer_` (ext4, eigener Clone, nur LF).
+  Die Windows-Arbeitskopie ist ein separater Clone; Abgleich nur über GitHub (Push/Pull).
+  Das Repo speichert LF (`.gitattributes`: `* text=auto`), unter Windows ggf. CRLF in der Arbeitskopie.
 - Keine globale Git-Identität unter Linux: für Commits
   `git -c user.name="$(git log -1 --format=%an)" -c user.email="$(git log -1 --format=%ae)" commit …`.
 - `build/Debug/fpcv.exe` (Windows-Build) ist getrackt und lokal oft geändert – nicht mitcommitten,
@@ -120,7 +118,7 @@ Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **ColorGradient**: Regler „Start/End Brightness“ wirkungslos – entfernen oder einbauen? Nutzer fragen.
 - **LOD/Culling** für sehr große Wolken (Blöcke + Frustum-Culling, gröbere Darstellung in der Ferne):
   größerer Umbau, nur bei Bedarf.
-- **Videoaufnahme langsam** (~3 Bilder/s): Ursache (glReadPixels, MJPG-Kodierung oder NTFS) nicht eingegrenzt.
+- **Videoaufnahme langsam** (~3 Bilder/s): Ursache (glReadPixels, MJPG-Kodierung oder das damalige NTFS-Laufwerk) nicht eingegrenzt.
 - **Optional**: echte Raycast-Kugeln mit den Farben aus der Datei (wie Sphere, aber RGB).
 - Kamerafahrt bewegt sich 0,1 m bzw. 2° pro Bild (im Video 25 Bilder/s korrekt, live bildratenabhängig).
 
