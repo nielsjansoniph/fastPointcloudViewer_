@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(PCL REQUIRED COMPONENTS common io)
 find_package(OpenCV REQUIRED COMPONENTS core videoio)
+find_package(Threads REQUIRED)
 
 if(WIN32)
     # Windows: dependencies via vcpkg
@@ -57,6 +58,7 @@ add_executable(fpcv
     src/Axes.cpp
     src/Camera.cpp
     src/Cloud.cpp
+    src/CloudLoader.cpp
     src/Shader.cpp
     src/VAO.cpp
     src/VBO.cpp
@@ -72,6 +74,7 @@ target_link_libraries(fpcv
     ${FPCV_GUI_LIBS}
     ${PCL_LIBRARIES}
     ${OpenCV_LIBS}
+    Threads::Threads
 )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

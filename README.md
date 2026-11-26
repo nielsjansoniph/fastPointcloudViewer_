@@ -41,15 +41,20 @@ einkompilierten Projektpfad (`shaders/`, abweichend per Umgebungsvariable `FPCV_
 ./build/linux/fpcv --help
 ```
 
+Große Dateien werden im Hintergrund geladen; ein Fenster zeigt den Fortschritt (bei binären
+`.ply` und `.obj` in Prozent, bei `.pcd` und ASCII-`.ply` nur als laufender Balken) und kann
+das Laden abbrechen. Mehrere Dateien werden nacheinander geladen.
+
 Auf Laptops mit zwei Grafikkarten (NVIDIA Optimus/PRIME) nutzt das Programm automatisch die
-NVIDIA-Karte – der Unterschied ist groß (102 Mio. Punkte: 2,4 statt 35 Bilder/s). Die
+NVIDIA-Karte – der Unterschied ist groß (102 Mio. Punkte: 2,4 statt 35 Bilder/s ohne LOD). Die
 Konsole zeigt beim Start `OpenGL renderer: …`. Mit `FPCV_INTEGRATED_GPU=1` bleibt es bei der
 integrierten Grafik.
 
 ## Projektstruktur
 
 - `src/` – C++-Quellen (`main.cpp` Einstieg, `Viewer` Anwendung, `PointShaders` Tabelle aller Shader,
-  `CameraPath` Kamerafahrten, `Axes`, `Camera`, `Cloud`, …)
+  `CameraPath` Kamerafahrten, `CloudLoader` Dateien lesen und in Blöcke sortieren, `Cloud`
+  GPU-Daten, Culling und LOD, `Axes`, `Camera`, …)
 - `shaders/` – GLSL-Shader; `common.glsl` enthält gemeinsame Uniforms und Funktionen
 - `records/` – aufgenommene Videos
 
@@ -69,6 +74,15 @@ Die Tastatur wirkt nur, solange der Mauszeiger nicht über dem Menü steht.
 
 - **Near / Far**: Stärke der Abdunklung mit der Entfernung (wenn „Use depth for point brightness“ aktiv).
 - **Speed (m/s)**: Bewegungsgeschwindigkeit; −/+ ändert um Faktor 1,25.
+- **Level of detail**: Die Punkte sind beim Laden in räumliche Blöcke sortiert (Octree, höchstens
+  65 536 Punkte je Block). Gezeichnet werden nur Blöcke im Sichtfeld; entfernte Blöcke zeigen nur
+  einen Teil ihrer Punkte, nahe Blöcke alle.
+  - *Level of detail*: aus = alle Punkte der sichtbaren Blöcke. Während einer Videoaufnahme ist
+    LOD immer aus (volle Qualität, die Bildrate spielt dort keine Rolle).
+  - *Point budget (M)*: höchstens so viele Millionen Punkte pro Bild. Reicht es nicht, werden
+    zuerst die entfernten Blöcke weiter ausgedünnt und ihre Punkte etwas größer gezeichnet.
+  - *Detail*: Punkte je Pixel der Blockgröße auf dem Bildschirm – höher = mehr Punkte in der Ferne.
+  - *Drawn*: gezeichnete / geladene Punkte.
 - **Orientation**: Koordinatenkreuz ein/aus und Länge; Modell in 90°-Schritten um X/Y/Z drehen.
   Z zeigt nach oben. Die Drehung wird nicht gespeichert.
 - **Pro Wolke**: PointSize und Shader-Auswahl:

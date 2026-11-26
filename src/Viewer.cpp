@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 
@@ -28,6 +30,31 @@ Viewer::Viewer(GLFWwindow* window)
     glEnable(GL_DEPTH_TEST);
 }
 
+// A file being loaded on the background thread. Shared with the thread, so the thread can
+// be detached on exit while it is still inside PCL (which cannot be cancelled).
+struct LoadJob
+{
+    std::string path;
+    LoadProgress progress;
+    std::atomic<bool> done{false};
+    CloudData data;
+    std::string error;
+    bool cancelled = false;
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+};
+
+Viewer::~Viewer()
+{
+    if (loadThread.joinable()){
+        loadJob->progress.cancel = true;
+        // own readers react within milliseconds; PCL (unknown progress) does not
+        if (loadJob->progress.fraction.load() >= 0.0f)
+            loadThread.join();
+        else
+            loadThread.detach();
+    }
+}
+
 bool Viewer::loadCloud(const std::string& path)
 {
     std::string ext = std::filesystem::path(path).extension().string();
@@ -40,18 +67,77 @@ bool Viewer::loadCloud(const std::string& path)
         std::cerr << "Unsupported file type (only .ply, .pcd and .obj): " << path << std::endl;
         return false;
     }
-    std::cout << "Loading " << path << std::endl;
-    try {
-        clouds.emplace_back(path);
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Error loading point cloud: " << e.what() << std::endl;
-        return false;
-    }
-    Cloud& cloud = clouds.back();
-    cloud.shaderType = cloud.hasColor ? kColorPointShader : kDefaultPointShader;
-    std::cout << "Loaded " << cloud.numPoints << " points" << (cloud.hasColor ? " with colors" : "") << std::endl;
+    loadQueue.push_back(path);
     return true;
+}
+
+void Viewer::pollLoading()
+{
+    // finished: upload to the GPU (here on the main thread, which owns the OpenGL context)
+    if (loadJob && loadJob->done.load(std::memory_order_acquire)){
+        loadThread.join();
+        LoadJob& job = *loadJob;
+        double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - job.start).count();
+        if (job.cancelled)
+            std::cout << "Loading cancelled: " << job.path << std::endl;
+        else if (!job.error.empty())
+            std::cerr << "Error loading point cloud: " << job.error << std::endl;
+        else {
+            std::size_t chunks = job.data.chunks.size();
+            clouds.emplace_back(job.path, std::move(job.data));
+            Cloud& cloud = clouds.back();
+            cloud.shaderType = cloud.hasColor ? kColorPointShader : kDefaultPointShader;
+            std::cout << "Loaded " << cloud.numPoints << " points" << (cloud.hasColor ? " with colors" : "")
+                      << " in " << chunks << " chunks, " << seconds << " s" << std::endl;
+        }
+        loadJob.reset();
+    }
+
+    if (!loadJob && !loadQueue.empty()){
+        loadJob = std::make_shared<LoadJob>();
+        loadJob->path = loadQueue.front();
+        loadQueue.pop_front();
+        std::cout << "Loading " << loadJob->path << std::endl;
+        loadThread = std::thread([job = loadJob]{
+            try {
+                job->data = loadCloudData(job->path, job->progress);
+            }
+            catch (const LoadCancelled&) {
+                job->cancelled = true;
+            }
+            catch (const std::exception& e) {
+                job->error = e.what();
+            }
+            catch (...) {
+                job->error = "unknown error";
+            }
+            job->done.store(true, std::memory_order_release);
+        });
+    }
+}
+
+void Viewer::drawLoadingUi()
+{
+    if (!loadJob)
+        return;
+    const LoadProgress& p = loadJob->progress;
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::Begin("Loading", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse
+                                     | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+    ImGui::TextUnformatted(std::filesystem::path(loadJob->path).filename().string().c_str());
+    double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - loadJob->start).count();
+    ImGui::Text("%s  (%.0f s)", p.stage.load(), seconds);
+    float fraction = p.fraction.load();
+    // negative fraction: ImGui shows an indeterminate (moving) bar
+    ImGui::ProgressBar(fraction >= 0.0f ? fraction : -(float)ImGui::GetTime(), ImVec2(400.0f, 0.0f));
+    if (!loadQueue.empty())
+        ImGui::Text("%d more file(s) queued", (int)loadQueue.size());
+    if (p.cancel.load())
+        ImGui::TextDisabled("Cancelling...");
+    else if (ImGui::Button("Cancel"))
+        loadJob->progress.cancel = true;
+    ImGui::End();
 }
 
 void Viewer::frame()
@@ -61,6 +147,8 @@ void Viewer::frame()
     ImGui::NewFrame();
 
     drawUi();
+    pollLoading();
+    drawLoadingUi();
     if (loadRequested){
         loadRequested = false;
         openLoadDialog();
@@ -99,6 +187,7 @@ void Viewer::drawUi()
     drawOrientationUi();
 
     loadRequested = ImGui::Button("Load");
+    drawLodUi();
     for (size_t i = 0; i < clouds.size(); i++){
         ImGui::PushID((int)i);
         drawCloudUi(clouds[i]);
@@ -140,6 +229,30 @@ void Viewer::drawOrientationUi()
     }
     if (ImGui::Button("Reset rotation"))
         modelRotation = glm::mat4(1.0f);
+    ImGui::Separator();
+}
+
+void Viewer::drawLodUi()
+{
+    if (!ImGui::CollapsingHeader("Level of detail", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+    ImGui::Checkbox("Level of detail", &lodEnabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Off: all points of the visible chunks (always off while recording)");
+    ImGui::BeginDisabled(!lodEnabled);
+    ImGui::SliderFloat("Point budget (M)", &pointBudgetMillions, 1.0f, 500.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("At most this many million points per frame");
+    ImGui::SliderFloat("Detail", &lodDetail, 0.05f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Points per pixel of a chunk's size on screen: higher = more points in the distance");
+    ImGui::EndDisabled();
+    std::size_t drawn = 0, total = 0;
+    for (const auto& c : clouds){
+        drawn += c.drawnPoints;
+        total += (std::size_t)c.numPoints;
+    }
+    ImGui::Text("Drawn: %.1f M of %.1f M points", drawn / 1e6, total / 1e6);
     ImGui::Separator();
 }
 
@@ -228,6 +341,35 @@ void Viewer::render(int framebufferWidth, int framebufferHeight)
     updateModelMatrix();
     RenderContext ctx{camera, modelMatrix, framebufferWidth, framebufferHeight};
 
+    // Frustum culling and level of detail for all clouds, then one common point budget.
+    // While recording, quality matters more than speed: all points of the visible chunks.
+    CloudView view;
+    view.clipFromObject = camera.cameraMatrix * modelMatrix;
+    view.cameraPosition = glm::vec3(glm::inverse(modelMatrix) * glm::vec4(camera.Position, 1.0f));
+    view.pixelsPerUnit = (float)framebufferHeight / (2.0f * std::tan(glm::radians(kFovDeg) * 0.5f));
+    view.lod = lodEnabled && !path.isRecording();
+    for (auto& c : clouds)
+        c.prepare(view);
+    // Over the point budget: lower the detail for all clouds until it fits. Close chunks
+    // stay complete as long as possible, distant ones are thinned out first.
+    auto pointsFor = [&](float detail){
+        double n = 0.0;
+        for (const auto& c : clouds) n += c.pointsForDetail(detail);
+        return n;
+    };
+    float detail = lodDetail;
+    double budget = pointBudgetMillions * 1e6;
+    if (view.lod && pointsFor(detail) > budget){
+        float lo = 1e-6f, hi = detail;   // pointsFor is monotonic: bisect on a log scale
+        for (int i = 0; i < 24; i++){
+            float mid = std::sqrt(lo * hi);
+            (pointsFor(mid) > budget ? hi : lo) = mid;
+        }
+        detail = lo;
+    }
+    // thinned out below the chosen detail: larger points close the gaps (not cube/sphere, sized in m)
+    float sizeFactor = std::clamp(std::sqrt(lodDetail / detail), 1.0f, 3.0f);
+
     for (auto& c : clouds){
         PointShader& ps = pointShaders[c.shaderType];
         ps.shader.Activate();
@@ -237,9 +379,8 @@ void Viewer::render(int framebufferWidth, int framebufferHeight)
 
         if (ps.programPointSize)
             glEnable(GL_PROGRAM_POINT_SIZE);
-        else
-            glPointSize(c.pointssize);
-        c.Draw();
+        float size = ps.programPointSize ? 0.0f : c.pointssize;
+        c.Draw(detail, view.lod ? lodDetail : detail, size, size * sizeFactor);
         glDisable(GL_PROGRAM_POINT_SIZE);
     }
 

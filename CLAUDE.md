@@ -16,10 +16,15 @@ cmake --build build/linux -j
   einkompiliert, siehe `src/Paths.h`; überschreibbar mit Umgebungsvariable `FPCV_SHADER_DIR`).
   Shader-Änderungen brauchen keinen Rebuild, nur einen Neustart. Videos landen in `<Projekt>/records/`.
 - Neue `.cpp`-Dateien in `CMakeLists.txt` (`add_executable`) eintragen.
-- Testdaten (exFAT-Laufwerk, nur lesen): `/mnt/5AED-2AE3/Scans/Halle1_V3.obj` – 938 000 Punkte mit
-  Farben, lädt in ~1 s, Standard-Test. Dort auch große Wolken ohne Farben, z. B.
-  `scans_hmv2_clean.ply` (102 Mio. Punkte, 2,9 GB). `jurgensen_merged.ply` (6,8 Mio.) liegt im
-  OneDrive-Ordner `Punktwolken`, der von Linux aus derzeit nicht erreichbar ist.
+- Testdaten (exFAT-Laufwerk, nur lesen) in `/mnt/5AED-2AE3/Scans/`:
+  - `Halle1_V3.obj` – 938 000 Punkte mit Farben, lädt in 0,3 s, Standard-Test
+  - `scans_hmv2_clean.ply` – 102 Mio. Punkte ohne Farben, 2,9 GB, lädt in ~4 s (eigener PLY-Leser)
+  - `Riegl_BMW-Werk_Regensburg_e57_blurred.ply` – 350 Mio. Punkte mit Farben, 5,6 GB, ~12 s,
+    5,6 GB auf der GPU: Härtetest für LOD
+  - `scans_hmv1.pcd` – 85 Mio., über PCL (kein Fortschritt); **~37 % kaputte Punkte**
+    (13 % exakt (0,0,0), 24 % Koordinaten ~1e38) – Test für Ausreißer im Octree
+  - `jurgensen_merged.ply` (6,8 Mio.) liegt im OneDrive-Ordner `Punktwolken`, von Linux aus
+    derzeit nicht erreichbar.
 - Es gibt keine automatisierten Tests. Prüfen = bauen, starten, Konsole auf
   `SHADER_COMPILATION_ERROR` prüfen, Screenshot ansehen:
   ```bash
@@ -50,16 +55,20 @@ cmake --build build/linux -j
 | `CameraPath.*` | Wegpunkte, Interpolation (0,1 m bzw. 2° pro Schritt), Replay, Videoaufnahme (OpenCV, MJPG). Aufnahme: 1 Schritt = 1 Videobild (25 Bilder/s); live: `replayPos += DeltaTime × 25`, Pose zwischen zwei Schritten interpoliert → gleiches Tempo wie im Video |
 | `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
 | `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
-| `Cloud.*` | .obj: eigener Leser (`readObj`, nur `v x y z [r g b]`-Zeilen, Farben 0..1 oder 0..255, locale-unabhängig per `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)). Lädt .ply/.pcd über PCL (wirft `std::runtime_error`): einmal als `PCLPointCloud2` lesen, bei Feld `rgb`/`rgba` → `PointXYZRGBA`, sonst `PointXYZ`. GPU: Positionen 12 Byte/Punkt (Attribut 0), Farben 4 Byte/Punkt (Attribut 1, nur bei `hasColor`), keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
+| `CloudLoader.*` | **Ohne OpenGL, läuft im Lade-Thread.** `loadCloudData` → `CloudData` (Positionen, Farben, Box, Chunks), meldet Fortschritt über `LoadProgress` (atomics: `fraction` < 0 = unbekannt, `stage`, `cancel` → wirft `LoadCancelled`). Leser: eigener für binäre Little-Endian-PLY (`readPlyBinary`, x/y/z float/double, red/green/blue; gibt `false` zurück bei ASCII, Big Endian, gepacktem `rgb`, Listen vor den Vertices → PCL); `.obj` (`readObj`, nur `v x y z [r g b]`, Farben 0..1 oder 0..255, `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)); sonst PCL (`PCLPointCloud2` → `PointXYZRGBA`/`PointXYZ`, ohne Fortschritt). Danach `ChunkBuilder`: Octree **in place** (Hoare-Partition über Positionen + Farben), Teilung an der Mitte der *tatsächlichen* Box jedes Knotens (Ausreißer), Blätter ≤ 65 536 Punkte (`kMaxChunkPoints`), nicht teilbare (identische Punkte) werden in Stücke geschnitten; obere 2 Ebenen parallel (`std::async`); jedes Blatt wird **gemischt** → jedes Präfix ist eine gleichmäßige Stichprobe (LOD) |
+| `Cloud.*` | GPU-Seite: lädt `CloudData` hoch (Positionen 12 Byte/Punkt Attribut 0, Farben 4 Byte/Punkt Attribut 1 nur bei `hasColor`), danach keine Punktdaten im RAM. `prepare(CloudView)`: Frustum-Culling der Chunk-Boxen (Ebenen aus `camMatrix * model`, Objektkoordinaten) und projizierte Größe². `pointsForDetail(d)`/`Draw(d, …)`: je Chunk `min(alle, d · Pixel²)` Punkte (Präfix), per `glMultiDrawArrays`; durch das Budget ausgedünnte Chunks in einem zweiten Aufruf mit größeren Punkten. Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
 | `Shader.*` | Shader-Programm; löst `#include "datei.glsl"` in Shader-Dateien auf |
 | `VAO.*`, `VBO.*` | Dünne OpenGL-Wrapper |
 | `Paths.h`, `UiWidgets.h` | Laufzeitpfade; `SliderFloatWithButtons` (Regler mit −/+) |
 
 ### Ablauf eines Frames (`Viewer::frame`, Reihenfolge ist wichtig)
-1. ImGui-Frame, Menü (`drawUi`), ggf. Datei-Dialog
+1. ImGui-Frame, Menü (`drawUi`), `pollLoading` (fertigen Lade-Job hochladen bzw. nächste Datei aus
+   `loadQueue` im `std::thread` starten), Ladefenster, ggf. Datei-Dialog
 2. Fenstergröße → Kamera; Eingabe (nur wenn keine Kamerafahrt läuft und die Maus nicht über dem Menü ist)
 3. `CameraPath::update` (startet Fahrt, setzt Kamera-Pose), `camera.updateMatrix`
-4. `render`: Modellmatrix, Wolken (Uniforms aus der Shader-Tabelle), Achsen, `ImGui::Render()`
+4. `render`: Modellmatrix; LOD: `prepare` aller Wolken, über dem Punktbudget Detail per Bisektion
+   senken (gemeinsam für alle Wolken; bei Videoaufnahme LOD aus); Wolken (Uniforms aus der
+   Shader-Tabelle), Achsen, `ImGui::Render()`
    erst hier (Achsenbeschriftung braucht die aktuelle Kameramatrix), Menü nur ohne Kamerafahrt
 5. `afterRender` → `CameraPath::afterRender` liest das Bild **vor** `glfwSwapBuffers` für das Video aus
 
@@ -101,6 +110,10 @@ cmake --build build/linux -j
   `glfwInit` `__NV_PRIME_RENDER_OFFLOAD`/`__GLX_VENDOR_LIBRARY_NAME`, wenn `/proc/driver/nvidia`
   existiert; Windows: exportierte `NvOptimusEnablement`/`AmdPowerXpressRequestHighPerformance`.
   Konsole zeigt `OpenGL renderer: …`; `FPCV_INTEGRATED_GPU=1` schaltet das ab.
+- Kein OpenGL im Lade-Thread; der GPU-Upload passiert in `Viewer::pollLoading` (Hauptthread).
+- Bildrate direkt nach dem Laden großer Wolken ist einige Sekunden lang niedrig – für Messungen abwarten.
+- Messwerte LOD (RTX 4080, 1600×900, Budget 30 Mio.): 102 Mio. Punkte Übersicht 162 statt 26
+  Bilder/s, von innen 240 (Vsync) statt 50; 350 Mio. Punkte 73 statt 28 Bilder/s.
 
 ## Git / Dateisystem
 
@@ -120,8 +133,8 @@ cmake --build build/linux -j
 Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Windows-Build prüfen**: octomap/assimp wurden auch im `WIN32`-Zweig entfernt, Umstrukturierung
   nach `src/`/`shaders/` – unter Windows noch nicht gebaut.
-- **LOD/Culling** für sehr große Wolken (Blöcke + Frustum-Culling, gröbere Darstellung in der Ferne):
-  größerer Umbau, nur bei Bedarf.
+- **LOD**: umgesetzt (2026-11-26). Möglich: eigener Leser für binäre `.pcd` (Fortschritt, weniger
+  RAM: PCL braucht ~5,5 GB für 85 Mio. Punkte); Punkte-Popping beim Bewegen ggf. glätten.
 - **Videoaufnahme**: früher ~3 Bilder/s auf dem NTFS/OneDrive-Laufwerk. Gemessen 2026-11-26 auf ext4
   (1600×900, Halle1_V3.obj): glReadPixels 5,3 ms, flip 0,4 ms, MJPG-Schreiben 6,4 ms, ~80 Bilder/s.
   Ursache war also vermutlich das Laufwerk (oder ntfs-3g). Unter Windows nicht gemessen.

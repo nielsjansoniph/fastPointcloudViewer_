@@ -16,6 +16,7 @@ public:
     bool record = false;                   // write the replay to a video in records/
 
     bool isReplaying() const { return replayPos >= 0.0; }
+    bool isRecording() const { return writer.isOpened(); }
 
     // Appends the current camera pose unless it equals the last waypoint
     void addWaypointIfChanged(const Camera& camera);

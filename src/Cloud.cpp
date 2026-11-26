@@ -1,178 +1,123 @@
 #include "Cloud.h"
 
 #include <algorithm>
-#include <cctype>
-#include <charconv>
 #include <cmath>
-#include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <stdexcept>
-#include <type_traits>
-#include <vector>
-
-#include <pcl/PCLPointCloud2.h>
-#include <pcl/conversions.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/io/ply_io.h>
-#include <pcl/point_types.h>
 
 #include "VBO.h"
 
 namespace {
 
-struct Rgba8 { std::uint8_t r, g, b, a; };
-
-// Copies positions (and colors) out of a PCL cloud and computes the bounding box
-template <typename PointT>
-void extract(const pcl::PointCloud<PointT>& cloud, std::vector<VertexPos>& positions,
-             glm::vec3& min, glm::vec3& max, std::vector<Rgba8>* colors)
+// Frustum planes (a, b, c, d with inside: a*x + b*y + c*z + d >= 0) from a clip matrix
+void frustumPlanes(const glm::mat4& m, glm::vec4 planes[6])
 {
-    positions.reserve(cloud.points.size());
-    if (colors) colors->reserve(cloud.points.size());
-    min = glm::vec3(INFINITY);
-    max = glm::vec3(-INFINITY);
-    for (const auto& p : cloud.points){
-        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
-            continue;   // skip invalid points
-        glm::vec3 pos(p.x, p.y, p.z);
-        positions.push_back({pos});
-        min = glm::min(min, pos);
-        max = glm::max(max, pos);
-        if constexpr (std::is_same_v<PointT, pcl::PointXYZRGBA>)
-            colors->push_back({p.r, p.g, p.b, 255});
-    }
+    glm::vec4 row[4];
+    for (int i = 0; i < 4; i++)
+        row[i] = glm::vec4(m[0][i], m[1][i], m[2][i], m[3][i]);
+    planes[0] = row[3] + row[0];   // left
+    planes[1] = row[3] - row[0];   // right
+    planes[2] = row[3] + row[1];   // bottom
+    planes[3] = row[3] - row[1];   // top
+    planes[4] = row[3] + row[2];   // near
+    planes[5] = row[3] - row[2];   // far
 }
 
-// Reads the vertices ("v x y z [r g b]") of a Wavefront OBJ file as points; faces, normals
-// and texture coordinates are ignored. Vertex colors are taken if every vertex has one
-// (range 0..1, or 0..255 if any component is > 1). Points are rotated from Y-up to Z-up.
-void readObj(const std::string& filename, std::vector<VertexPos>& positions,
-             glm::vec3& min, glm::vec3& max, std::vector<Rgba8>& colors, bool& hasColor)
+// false if the box is completely outside one of the planes
+bool boxInFrustum(const glm::vec4 planes[6], const glm::vec3& lo, const glm::vec3& hi)
 {
-    std::ifstream in(filename, std::ios::binary);
-    if (!in)
-        throw std::runtime_error("could not read " + filename);
-
-    std::vector<glm::vec3> rgb;     // float colors, converted once the range is known
-    bool allColored = true;
-    float maxComponent = 0.0f;
-    min = glm::vec3(INFINITY);
-    max = glm::vec3(-INFINITY);
-
-    std::string line;
-    while (std::getline(in, line)){
-        if (line.size() < 2 || line[0] != 'v' || (line[1] != ' ' && line[1] != '\t'))
-            continue;   // only plain vertices, not vn/vt/f/...
-        float val[6];
-        int n = 0;
-        // from_chars is locale-independent (strtof would expect ',' in a German locale)
-        const char* s = line.data() + 2;
-        const char* e = line.data() + line.size();
-        while (n < 6){
-            while (s < e && (*s == ' ' || *s == '\t')) ++s;
-            auto [end, ec] = std::from_chars(s, e, val[n]);
-            if (ec != std::errc()) break;
-            ++n;
-            s = end;
-        }
-        if (n < 3)
-            continue;
-        // OBJ is Y-up, the viewer is Z-up: rotate +90° about X, (x, y, z) -> (x, -z, y)
-        glm::vec3 pos(val[0], -val[2], val[1]);
-        if (!std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z))
-            continue;
-        positions.push_back({pos});
-        min = glm::min(min, pos);
-        max = glm::max(max, pos);
-        if (n == 6 && allColored){
-            rgb.emplace_back(val[3], val[4], val[5]);
-            maxComponent = std::max({maxComponent, val[3], val[4], val[5]});
-        }
-        else
-            allColored = false;
+    for (int i = 0; i < 6; i++){
+        const glm::vec4& p = planes[i];
+        // corner of the box farthest along the plane normal
+        glm::vec3 v(p.x >= 0.0f ? hi.x : lo.x, p.y >= 0.0f ? hi.y : lo.y, p.z >= 0.0f ? hi.z : lo.z);
+        if (p.x * v.x + p.y * v.y + p.z * v.z + p.w < 0.0f)
+            return false;
     }
-
-    hasColor = allColored && !rgb.empty() && rgb.size() == positions.size();
-    if (hasColor){
-        float scale = maxComponent > 1.0f ? 1.0f : 255.0f;
-        colors.reserve(rgb.size());
-        for (const auto& c : rgb){
-            glm::vec3 v = glm::clamp(c * scale, 0.0f, 255.0f) + 0.5f;
-            colors.push_back({(std::uint8_t)v.r, (std::uint8_t)v.g, (std::uint8_t)v.b, 255});
-        }
-    }
+    return true;
 }
 
 } // namespace
 
-Cloud::Cloud(const std::string& filename)
+Cloud::Cloud(const std::string& filename, CloudData&& data)
 	: filename(filename)
 {
-	std::vector<VertexPos> positions;
-	std::vector<Rgba8> colors;
-	std::string ext = std::filesystem::path(filename).extension().string();
-	for (auto& ch : ext) ch = (char)std::tolower((unsigned char)ch);
-	if (ext == ".obj")
-		readObj(filename, positions, min, max, colors, hasColor);
-	else {
-		// Read the file once into a generic cloud, then convert depending on the fields.
-		// Everything in this scope is freed before the GPU upload.
-		pcl::PCLPointCloud2 blob;
-
-		int result = -1;
-		if (ext == ".ply"){
-			pcl::PLYReader reader;
-			result = reader.read(filename, blob);
-		}
-		else if (ext == ".pcd"){
-			pcl::PCDReader reader;
-			result = reader.read(filename, blob);
-		}
-		else
-			throw std::runtime_error("unsupported file type: " + filename);
-		if (result < 0)
-			throw std::runtime_error("could not read " + filename);
-
-		for (const auto& field : blob.fields)
-			if (field.name == "rgb" || field.name == "rgba")
-				hasColor = true;
-
-		if (hasColor){
-			pcl::PointCloud<pcl::PointXYZRGBA> cloud;
-			pcl::fromPCLPointCloud2(blob, cloud);
-			blob = pcl::PCLPointCloud2();   // free the raw data early
-			extract(cloud, positions, min, max, &colors);
-		}
-		else{
-			pcl::PointCloud<pcl::PointXYZ> cloud;
-			pcl::fromPCLPointCloud2(blob, cloud);
-			blob = pcl::PCLPointCloud2();
-			extract(cloud, positions, min, max, (std::vector<Rgba8>*)nullptr);
-		}
-	}
-	if (positions.empty())
-		throw std::runtime_error("no points in " + filename);
-	numPoints = (GLsizei)positions.size();
+	CloudData d = std::move(data);   // freed at the end of the constructor
+	numPoints = (GLsizei)d.positions.size();
+	hasColor = !d.colors.empty();
+	min = d.min;
+	max = d.max;
+	chunks = std::move(d.chunks);
 
 	// Positions (12 bytes/point) and, if present, colors (4 bytes/point) in separate buffers
 	VAO.Bind();
-	VBO positionBuffer(positions);
+	VBO positionBuffer(d.positions);
 	VAO.LinkAttrib(positionBuffer, 0, 3, GL_FLOAT, sizeof(VertexPos), (void*)0);
 	if (hasColor){
-		VBO colorBuffer(colors.data(), colors.size() * sizeof(Rgba8));
+		VBO colorBuffer(d.colors.data(), d.colors.size() * sizeof(Rgba8));
 		VAO.LinkAttrib(colorBuffer, 1, 4, GL_UNSIGNED_BYTE, sizeof(Rgba8), (void*)0, GL_TRUE);
 	}
 	VAO.Unbind();
 	positionBuffer.Unbind();
-	// positions/colors go out of scope here: the data is kept on the GPU only
 }
 
-void Cloud::Draw()
+void Cloud::prepare(const CloudView& view)
 {
+	glm::vec4 planes[6];
+	frustumPlanes(view.clipFromObject, planes);
+
+	visible.clear();
+	pixels2.clear();
+	for (std::uint32_t i = 0; i < (std::uint32_t)chunks.size(); i++){
+		const Chunk& c = chunks[i];
+		if (!boxInFrustum(planes, c.min, c.max))
+			continue;
+		float p2 = INFINITY;   // camera inside the box or no LOD: all points
+		if (view.lod){
+			// projected size of the chunk in pixels: the closer, the more points
+			float size = glm::length(c.max - c.min);
+			float dist = glm::length(view.cameraPosition - glm::clamp(view.cameraPosition, c.min, c.max));
+			if (dist > 0.0f){
+				float pixels = size / dist * view.pixelsPerUnit;
+				p2 = pixels * pixels;
+			}
+		}
+		visible.push_back(i);
+		pixels2.push_back(p2);
+	}
+}
+
+double Cloud::pointsForDetail(float detail) const
+{
+	double total = 0.0;
+	for (std::size_t v = 0; v < visible.size(); v++)
+		total += std::clamp(std::ceil(detail * pixels2[v]), 1.0f, (float)chunks[visible[v]].count);
+	return total;
+}
+
+void Cloud::Draw(float detail, float fullDetail, float pointSize, float thinnedPointSize)
+{
+	for (int k = 0; k < 2; k++){
+		drawFirst[k].clear();
+		drawCount[k].clear();
+	}
+	drawnPoints = 0;
+	for (std::size_t v = 0; v < visible.size(); v++){
+		const Chunk& c = chunks[visible[v]];
+		float n = std::clamp(std::ceil(detail * pixels2[v]), 1.0f, (float)c.count);
+		float full = std::clamp(std::ceil(fullDetail * pixels2[v]), 1.0f, (float)c.count);
+		int k = n < full ? 1 : 0;
+		drawFirst[k].push_back((GLint)c.first);
+		drawCount[k].push_back((GLsizei)n);
+		drawnPoints += (std::size_t)n;
+	}
+
 	if (!hasColor)
 		glVertexAttrib4f(1, 1.0f, 1.0f, 1.0f, 1.0f);   // shaders reading the color get white
 	VAO.Bind();
-	glDrawArrays(GL_POINTS, 0, numPoints);
+	for (int k = 0; k < 2; k++){
+		if (drawFirst[k].empty())
+			continue;
+		if (pointSize > 0.0f)
+			glPointSize(k == 0 ? pointSize : thinnedPointSize);
+		glMultiDrawArrays(GL_POINTS, drawFirst[k].data(), drawCount[k].data(), (GLsizei)drawFirst[k].size());
+	}
 	VAO.Unbind();
 }
