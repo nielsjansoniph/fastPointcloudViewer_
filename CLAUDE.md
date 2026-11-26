@@ -69,7 +69,7 @@ cmake --build build/linux -j
 | 0 | Default | `points.vert` + `default.frag` | Farbe nach Tiefe (HSV) |
 | 1 | Monocolor | `points.vert` + `monoColor.frag` | Standard beim Laden (`kDefaultPointShader`) |
 | 2 | Cube | `cube.vert` + `cube.frag` | Raycast achsenparalleler Würfel |
-| 3 | ColorGradient | `points.vert` + `colorgradient.frag` | Start/End Brightness im Menü sind (noch) ohne Wirkung |
+| 3 | ColorGradient | `points.vert` + `colorgradient.frag` | Farbton nach Entfernung; Helligkeit von Start Brightness (nah) bis End Brightness (fern) |
 | 4 | Debug | `points.vert` + `debug.frag` | geteilte Ansicht (`split`) |
 | 5 | zMap | `points.vert` + `zmap.frag` | Farbe nach Höhe **z** |
 | 6 | Sphere | `sphere.vert` + `sphere.frag` | Raycast Kugel |
@@ -94,7 +94,6 @@ cmake --build build/linux -j
 - **GCC**: Member mit gleichem Namen wie sein Typ (`VAO VAO;`) muss als `::VAO VAO;` geschrieben werden.
 - `<glad/glad.h>` immer vor `<GLFW/glfw3.h>` einbinden; `imgui_impl_opengl3_loader.h` nie einbinden.
 - Bewegungen/Rotationen mit `ImGui::GetIO().DeltaTime` skalieren – das Programm läuft mit ~120–240 FPS.
-- Videoaufnahme ist langsam (~3 Bilder/s beim Aufnehmen), Ursache nicht untersucht.
 
 ## Git / Dateisystem
 
@@ -109,15 +108,16 @@ cmake --build build/linux -j
 - Große Testdaten (`*.ply`, `*.pcd`, `records/`) sind ignoriert, nicht committen. Keine
   Wildcard-Löschungen in `records/` (könnte Videos des Nutzers treffen), nur eigene Dateien gezielt.
 
-## Offene Punkte (Stand 2026-11-23)
+## Offene Punkte (Stand 2026-11-26)
 
 Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Windows-Build prüfen**: octomap/assimp wurden auch im `WIN32`-Zweig entfernt, Umstrukturierung
   nach `src/`/`shaders/` – unter Windows noch nicht gebaut.
-- **ColorGradient**: Regler „Start/End Brightness“ wirkungslos – entfernen oder einbauen? Nutzer fragen.
 - **LOD/Culling** für sehr große Wolken (Blöcke + Frustum-Culling, gröbere Darstellung in der Ferne):
   größerer Umbau, nur bei Bedarf.
-- **Videoaufnahme langsam** (~3 Bilder/s): Ursache (glReadPixels, MJPG-Kodierung oder das damalige NTFS-Laufwerk) nicht eingegrenzt.
+- **Videoaufnahme**: früher ~3 Bilder/s auf dem NTFS/OneDrive-Laufwerk. Gemessen 2026-11-26 auf ext4
+  (1600×900, Halle1_V3.obj): glReadPixels 5,3 ms, flip 0,4 ms, MJPG-Schreiben 6,4 ms, ~80 Bilder/s.
+  Ursache war also vermutlich das Laufwerk (oder ntfs-3g). Unter Windows nicht gemessen.
 - **Optional**: echte Raycast-Kugeln mit den Farben aus der Datei (wie Sphere, aber RGB).
 - Kamerafahrt bewegt sich 0,1 m bzw. 2° pro Bild (im Video 25 Bilder/s korrekt, live bildratenabhängig).
 

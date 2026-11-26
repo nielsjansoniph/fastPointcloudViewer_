@@ -78,6 +78,8 @@ std::vector<PointShader> createPointShaders()
             setFloat(s, "cFactor", st.cFactor);
             setFloat(s, "startDist", st.startDist);
             setFloat(s, "endDist", st.endDist);
+            setFloat(s, "startBrightness", st.startBrightness);
+            setFloat(s, "endBrightness", st.endBrightness);
         }});
 
     // 4: split view, distance coloring

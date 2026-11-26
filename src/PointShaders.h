@@ -17,8 +17,8 @@ struct ShaderSettings
     float cFactor = 0.5f;
     float startDist = 2.0f;
     float endDist = 100.0f;
-    float startBrightness = 0.8f;   // shown for ColorGradient, not used by the shader yet
-    float endBrightness = 0.2f;     // shown for ColorGradient, not used by the shader yet
+    float startBrightness = 0.8f;   // ColorGradient: brightness near the camera
+    float endBrightness = 0.2f;     // ColorGradient: brightness far away
     float split = 800.0f;           // screen x of the split line (debug, zMap)
     glm::vec3 startColor = glm::vec3(0.5f, 1.0f, 0.5f);
     glm::vec3 endColor = glm::vec3(0.0f, 0.0f, 0.4f);
