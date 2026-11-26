@@ -103,8 +103,8 @@ cmake --build build/linux -j
   Das Repo speichert LF (`.gitattributes`: `* text=auto`), unter Windows ggf. CRLF in der Arbeitskopie.
 - Keine globale Git-Identität unter Linux: für Commits
   `git -c user.name="$(git log -1 --format=%an)" -c user.email="$(git log -1 --format=%ae)" commit …`.
-- `build/Debug/fpcv.exe` (Windows-Build) ist getrackt und lokal oft geändert – nicht mitcommitten,
-  außer der Nutzer will es. `*.pdb` ist ignoriert (GitHub-Limit 100 MB).
+- Binärdateien sind nicht im Repo (seit 2026-11-26): `build/`, `*.exe`, `*.dll`, `*.pdb` sind ignoriert.
+  Unter Windows kopiert der vcpkg-Build die DLLs selbst nach `build/Debug`.
 - Push zu GitHub bricht gelegentlich mit Timeout ab – einfach erneut versuchen.
 - Große Testdaten (`*.ply`, `*.pcd`, `records/`) sind ignoriert, nicht committen. Keine
   Wildcard-Löschungen in `records/` (könnte Videos des Nutzers treffen), nur eigene Dateien gezielt.
@@ -114,8 +114,6 @@ cmake --build build/linux -j
 Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Windows-Build prüfen**: octomap/assimp wurden auch im `WIN32`-Zweig entfernt, Umstrukturierung
   nach `src/`/`shaders/` – unter Windows noch nicht gebaut.
-- **Binärdateien aus Git entfernen?** `main.exe` (42 MB), `default.exe`, DLLs und Textur in
-  `build/Debug` sind getrackt. Entfernen nur nach Zustimmung (andere Clones verlieren sie beim Pull).
 - **ColorGradient**: Regler „Start/End Brightness“ wirkungslos – entfernen oder einbauen? Nutzer fragen.
 - **LOD/Culling** für sehr große Wolken (Blöcke + Frustum-Culling, gröbere Darstellung in der Ferne):
   größerer Umbau, nur bei Bedarf.

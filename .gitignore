@@ -7,8 +7,7 @@ halle.ply
 iph full.ply
 scans_.ply
 main-surface-kumpe.exe
-build/*
-!build/debug
+build/
 .vscode
 iph_full.ply
 light.zip
@@ -20,3 +19,5 @@ IPH EG PHHalle 1OG 2.ply
 IPH PA Halle.ply
 Messe Halle leer.ply
 *.pdb
+*.exe
+*.dll
