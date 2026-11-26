@@ -4,7 +4,7 @@
 
 #include "VAO.h"
 
-// A point cloud loaded from .ply or .pcd. The points live only on the GPU;
+// A point cloud loaded from .ply, .pcd or .obj (vertices only). The points live only on the GPU;
 // the CPU side keeps the bounding box and the display settings.
 class Cloud
 {

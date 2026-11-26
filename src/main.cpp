@@ -25,8 +25,8 @@ int main(int argc, char* argv[])
     for (int a = 1; a < argc; a++){
         std::string arg = argv[a];
         if (arg == "-h" || arg == "--help"){
-            std::cout << "Usage: " << argv[0] << " [cloud.ply|cloud.pcd ...]\n"
-                      << "Loads the given point clouds (.ply or .pcd) at startup.\n";
+            std::cout << "Usage: " << argv[0] << " [cloud.ply|cloud.pcd|cloud.obj ...]\n"
+                      << "Loads the given point clouds (.ply, .pcd, or the vertices of an .obj) at startup.\n";
             return 0;
         }
         startupFiles.push_back(arg);

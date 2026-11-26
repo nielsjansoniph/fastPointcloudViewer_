@@ -36,8 +36,8 @@ bool Viewer::loadCloud(const std::string& path)
         std::cerr << "File not found: " << path << std::endl;
         return false;
     }
-    if (ext != ".ply" && ext != ".pcd"){
-        std::cerr << "Unsupported file type (only .ply and .pcd): " << path << std::endl;
+    if (ext != ".ply" && ext != ".pcd" && ext != ".obj"){
+        std::cerr << "Unsupported file type (only .ply, .pcd and .obj): " << path << std::endl;
         return false;
     }
     std::cout << "Loading " << path << std::endl;
@@ -160,7 +160,7 @@ void Viewer::drawCloudUi(Cloud& cloud)
 void Viewer::openLoadDialog()
 {
     nfdu8char_t* outPath = nullptr;
-    nfdu8filteritem_t filters[1] = {{"point cloud", "pcd,ply"}};
+    nfdu8filteritem_t filters[1] = {{"point cloud", "pcd,ply,obj"}};
     nfdopendialogu8args_t args = {0};
     args.filterList = filters;
     args.filterCount = 1;

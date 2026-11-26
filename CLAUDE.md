@@ -1,6 +1,6 @@
 # CLAUDE.md – Einarbeitung für Agenten
 
-Fast Point Cloud Viewer (`fpcv`): C++17/OpenGL-3.3-Viewer für große Punktwolken (.ply/.pcd)
+Fast Point Cloud Viewer (`fpcv`): C++17/OpenGL-3.3-Viewer für große Punktwolken (.ply/.pcd/.obj)
 mit First-Person-Navigation, mehreren Darstellungs-Shadern und Kamerafahrten mit Videoaufnahme.
 Bedienung und Nutzersicht: siehe `README.md`.
 
@@ -9,20 +9,21 @@ Bedienung und Nutzersicht: siehe `README.md`.
 ```bash
 cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release   # einmalig bzw. nach neuen Quelldateien
 cmake --build build/linux -j
-./build/linux/fpcv [wolke.ply|wolke.pcd ...]            # aus beliebigem Ordner startbar
+./build/linux/fpcv [wolke.ply|wolke.pcd|modell.obj ...] # aus beliebigem Ordner startbar
 ```
 
 - Shader werden zur Laufzeit aus `<Projekt>/shaders/` geladen (Pfad per CMake als `FPCV_SOURCE_DIR`
   einkompiliert, siehe `src/Paths.h`; überschreibbar mit Umgebungsvariable `FPCV_SHADER_DIR`).
   Shader-Änderungen brauchen keinen Rebuild, nur einen Neustart. Videos landen in `<Projekt>/records/`.
 - Neue `.cpp`-Dateien in `CMakeLists.txt` (`add_executable`) eintragen.
-- Echte Testdaten: `jurgensen_merged.ply` (6,8 Mio. Punkte) liegt im OneDrive-Ordner `Punktwolken`,
-  der von Linux aus derzeit nicht erreichbar ist. Ist keine Testwolke verfügbar, den Nutzer nach
-  einem Pfad fragen (nicht breit suchen).
+- Testdaten (exFAT-Laufwerk, nur lesen): `/mnt/5AED-2AE3/Scans/Halle1_V3.obj` – 938 000 Punkte mit
+  Farben, lädt in ~1 s, Standard-Test. Dort auch große Wolken ohne Farben, z. B.
+  `scans_hmv2_clean.ply` (102 Mio. Punkte, 2,9 GB). `jurgensen_merged.ply` (6,8 Mio.) liegt im
+  OneDrive-Ordner `Punktwolken`, der von Linux aus derzeit nicht erreichbar ist.
 - Es gibt keine automatisierten Tests. Prüfen = bauen, starten, Konsole auf
   `SHADER_COMPILATION_ERROR` prüfen, Screenshot ansehen:
   ```bash
-  (./build/linux/fpcv /pfad/zu/wolke.ply > log.txt 2>&1 &); sleep 7
+  (./build/linux/fpcv /mnt/5AED-2AE3/Scans/Halle1_V3.obj > log.txt 2>&1 &); sleep 7
   WID=$(xwininfo -root -tree | grep "Fast first person" | awk '{print $1}' | head -1)
   import -window "$WID" shot.png; pkill -x fpcv          # NICHT pkill -f (trifft die eigene Shell)
   ```
@@ -49,7 +50,7 @@ cmake --build build/linux -j
 | `CameraPath.*` | Wegpunkte, Interpolation (Strecke + Winkel), Replay, Videoaufnahme (OpenCV, MJPG) |
 | `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
 | `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
-| `Cloud.*` | Lädt .ply/.pcd über PCL (wirft `std::runtime_error`): einmal als `PCLPointCloud2` lesen, bei Feld `rgb`/`rgba` → `PointXYZRGBA`, sonst `PointXYZ`. GPU: Positionen 12 Byte/Punkt (Attribut 0), Farben 4 Byte/Punkt (Attribut 1, nur bei `hasColor`), keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
+| `Cloud.*` | .obj: eigener Leser (`readObj`, nur `v x y z [r g b]`-Zeilen, Farben 0..1 oder 0..255, locale-unabhängig per `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)). Lädt .ply/.pcd über PCL (wirft `std::runtime_error`): einmal als `PCLPointCloud2` lesen, bei Feld `rgb`/`rgba` → `PointXYZRGBA`, sonst `PointXYZ`. GPU: Positionen 12 Byte/Punkt (Attribut 0), Farben 4 Byte/Punkt (Attribut 1, nur bei `hasColor`), keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
 | `Shader.*` | Shader-Programm; löst `#include "datei.glsl"` in Shader-Dateien auf |
 | `VAO.*`, `VBO.*` | Dünne OpenGL-Wrapper |
 | `Paths.h`, `UiWidgets.h` | Laufzeitpfade; `SliderFloatWithButtons` (Regler mit −/+) |

@@ -1,6 +1,6 @@
 # Fast Point Cloud Viewer (fpcv)
 
-Schneller First-Person-Viewer für große Punktwolken (`.ply`, `.pcd`) auf Basis von OpenGL 3.3,
+Schneller First-Person-Viewer für große Punktwolken (`.ply`, `.pcd`, Eckpunkte aus `.obj`) auf Basis von OpenGL 3.3,
 Dear ImGui und PCL. Mit verschiedenen Darstellungs-Shadern, frei drehbarer Modellausrichtung
 und Kamerafahrten, die als Video aufgenommen werden können.
 
@@ -37,6 +37,7 @@ einkompilierten Projektpfad (`shaders/`, abweichend per Umgebungsvariable `FPCV_
 ```bash
 ./build/linux/fpcv                           # leer starten, Wolken über „Load“ laden
 ./build/linux/fpcv scan.ply andere.pcd       # Wolken direkt beim Start laden
+./build/linux/fpcv modell.obj                # bei .obj nur die Eckpunkte (mit Farben), automatisch von Y-oben auf Z-oben gedreht
 ./build/linux/fpcv --help
 ```
 
