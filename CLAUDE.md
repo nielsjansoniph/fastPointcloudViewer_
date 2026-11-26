@@ -21,8 +21,12 @@ cmake --build build/linux -j
   - `scans_hmv2_clean.ply` – 102 Mio. Punkte ohne Farben, 2,9 GB, lädt in ~4 s (eigener PLY-Leser)
   - `Riegl_BMW-Werk_Regensburg_e57_blurred.ply` – 350 Mio. Punkte mit Farben, 5,6 GB, ~12 s,
     5,6 GB auf der GPU: Härtetest für LOD
-  - `scans_hmv1.pcd` – 85 Mio., über PCL (kein Fortschritt); **~37 % kaputte Punkte**
-    (13 % exakt (0,0,0), 24 % Koordinaten ~1e38) – Test für Ausreißer im Octree
+  - `scans_hmv1.pcd` – 85 Mio., ~9 s, 2,1 GB RAM (mit PCL 5,5 GB); **~37 % kaputte Punkte**
+    (13 % exakt (0,0,0), 24 % Koordinaten ~1e38) – Test für Ausreißer im Octree.
+    `scan_v1+2.pcd`: x/y/z nicht die ersten Felder, Füllfeld `_` mit COUNT 4
+  - PCD-Leser gegen PCL prüfen: Testprogramm, das `src/CloudLoader.cpp` mit PCL linkt, Dateien in
+    allen drei DATA-Arten per `pcl::io::savePCDFile*` erzeugt und Punkte/Farben sortiert vergleicht
+    (Reihenfolge ändert sich durch die Chunks)
   - `jurgensen_merged.ply` (6,8 Mio.) liegt im OneDrive-Ordner `Punktwolken`, von Linux aus
     derzeit nicht erreichbar.
 - Es gibt keine automatisierten Tests. Prüfen = bauen, starten, Konsole auf
@@ -55,7 +59,7 @@ cmake --build build/linux -j
 | `CameraPath.*` | Wegpunkte, Interpolation (0,1 m bzw. 2° pro Schritt), Replay, Videoaufnahme (OpenCV, MJPG). Aufnahme: 1 Schritt = 1 Videobild (25 Bilder/s); live: `replayPos += DeltaTime × 25`, Pose zwischen zwei Schritten interpoliert → gleiches Tempo wie im Video |
 | `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
 | `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
-| `CloudLoader.*` | **Ohne OpenGL, läuft im Lade-Thread.** `loadCloudData` → `CloudData` (Positionen, Farben, Box, Chunks), meldet Fortschritt über `LoadProgress` (atomics: `fraction` < 0 = unbekannt, `stage`, `cancel` → wirft `LoadCancelled`). Leser: eigener für binäre Little-Endian-PLY (`readPlyBinary`, x/y/z float/double, red/green/blue; gibt `false` zurück bei ASCII, Big Endian, gepacktem `rgb`, Listen vor den Vertices → PCL); `.obj` (`readObj`, nur `v x y z [r g b]`, Farben 0..1 oder 0..255, `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)); sonst PCL (`PCLPointCloud2` → `PointXYZRGBA`/`PointXYZ`, ohne Fortschritt). Danach `ChunkBuilder`: Octree **in place** (Hoare-Partition über Positionen + Farben), Teilung an der Mitte der *tatsächlichen* Box jedes Knotens (Ausreißer), Blätter ≤ 65 536 Punkte (`kMaxChunkPoints`), nicht teilbare (identische Punkte) werden in Stücke geschnitten; obere 2 Ebenen parallel (`std::async`); jedes Blatt wird **gemischt** → jedes Präfix ist eine gleichmäßige Stichprobe (LOD) |
+| `CloudLoader.*` | **Ohne OpenGL, läuft im Lade-Thread.** `loadCloudData` → `CloudData` (Positionen, Farben, Box, Chunks), meldet Fortschritt über `LoadProgress` (atomics: `fraction` < 0 = unbekannt, `stage`, `cancel` → wirft `LoadCancelled`). Leser: eigener für binäre Little-Endian-PLY (`readPlyBinary`, x/y/z float/double, red/green/blue; gibt `false` zurück bei ASCII, Big Endian, gepacktem `rgb`, Listen vor den Vertices → PCL); eigener für PCD (`readPcd`: `ascii`, `binary`, `binary_compressed` mit LZF (`lzfDecompress`, Felder spaltenweise), x/y/z float/double, gepacktes `rgb`/`rgba` (0xAARRGGBB; in ASCII als Ganzzahl oder Float-Bits); sonst `false` → PCL); `.obj` (`readObj`, nur `v x y z [r g b]`, Farben 0..1 oder 0..255, `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)); sonst PCL (`PCLPointCloud2` → `PointXYZRGBA`/`PointXYZ`, ohne Fortschritt). Danach `ChunkBuilder`: Octree **in place** (Hoare-Partition über Positionen + Farben), Teilung an der Mitte der *tatsächlichen* Box jedes Knotens (Ausreißer), Blätter ≤ 65 536 Punkte (`kMaxChunkPoints`), nicht teilbare (identische Punkte) werden in Stücke geschnitten; obere 2 Ebenen parallel (`std::async`); jedes Blatt wird **gemischt** → jedes Präfix ist eine gleichmäßige Stichprobe (LOD) |
 | `Cloud.*` | GPU-Seite: lädt `CloudData` hoch (Positionen 12 Byte/Punkt Attribut 0, Farben 4 Byte/Punkt Attribut 1 nur bei `hasColor`), danach keine Punktdaten im RAM. `prepare(CloudView)`: Frustum-Culling der Chunk-Boxen (Ebenen aus `camMatrix * model`, Objektkoordinaten) und projizierte Größe². `pointsForDetail(d)`/`Draw(d, …)`: je Chunk `min(alle, d · Pixel²)` Punkte (Präfix), per `glMultiDrawArrays`; durch das Budget ausgedünnte Chunks in einem zweiten Aufruf mit größeren Punkten. Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
 | `Shader.*` | Shader-Programm; löst `#include "datei.glsl"` in Shader-Dateien auf |
 | `VAO.*`, `VBO.*` | Dünne OpenGL-Wrapper |
@@ -133,8 +137,7 @@ cmake --build build/linux -j
 Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Windows-Build prüfen**: octomap/assimp wurden auch im `WIN32`-Zweig entfernt, Umstrukturierung
   nach `src/`/`shaders/` – unter Windows noch nicht gebaut.
-- **LOD**: umgesetzt (2026-11-26). Möglich: eigener Leser für binäre `.pcd` (Fortschritt, weniger
-  RAM: PCL braucht ~5,5 GB für 85 Mio. Punkte); Punkte-Popping beim Bewegen ggf. glätten.
+- **LOD**: umgesetzt (2026-11-26). Möglich: Punkte-Popping beim Bewegen ggf. glätten.
 - **Videoaufnahme**: früher ~3 Bilder/s auf dem NTFS/OneDrive-Laufwerk. Gemessen 2026-11-26 auf ext4
   (1600×900, Halle1_V3.obj): glReadPixels 5,3 ms, flip 0,4 ms, MJPG-Schreiben 6,4 ms, ~80 Bilder/s.
   Ursache war also vermutlich das Laufwerk (oder ntfs-3g). Unter Windows nicht gemessen.

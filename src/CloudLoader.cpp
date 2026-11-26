@@ -279,6 +279,231 @@ bool readPlyBinary(const std::string& filename, CloudData& d, LoadProgress& prog
     return true;
 }
 
+// ---------------------------------------------------------------- PCD (own reader)
+
+struct PcdField { std::string name; std::size_t size = 4; char type = 'F'; std::size_t count = 1; std::size_t offset = 0; std::size_t index = 0; };
+
+// LZF decompression (format of liblzf, used by PCL for binary_compressed). Returns the
+// number of bytes written, 0 on corrupt data.
+std::size_t lzfDecompress(const std::uint8_t* in, std::size_t inLen, std::uint8_t* out, std::size_t outLen)
+{
+    const std::uint8_t* ip = in;
+    const std::uint8_t* inEnd = in + inLen;
+    std::uint8_t* op = out;
+    std::uint8_t* outEnd = out + outLen;
+    while (ip < inEnd){
+        unsigned ctrl = *ip++;
+        if (ctrl < 32){                              // literal run of ctrl + 1 bytes
+            ctrl++;
+            if (op + ctrl > outEnd || ip + ctrl > inEnd) return 0;
+            std::memcpy(op, ip, ctrl);
+            op += ctrl;
+            ip += ctrl;
+        }
+        else {                                       // back reference
+            std::size_t len = ctrl >> 5;
+            std::size_t back = ((ctrl & 0x1f) << 8) + 1;
+            if (ip >= inEnd) return 0;
+            if (len == 7){
+                len += *ip++;
+                if (ip >= inEnd) return 0;
+            }
+            back += *ip++;
+            len += 2;
+            if (op + len > outEnd || back > (std::size_t)(op - out)) return 0;
+            const std::uint8_t* ref = op - back;
+            for (; len; --len) *op++ = *ref++;       // may overlap: byte by byte
+        }
+    }
+    return (std::size_t)(op - out);
+}
+
+// Packed PCL color (rgb as float bits or rgba as uint32): 0xAARRGGBB
+inline Rgba8 unpackPclColor(std::uint32_t v)
+{
+    return {(std::uint8_t)((v >> 16) & 0xFF), (std::uint8_t)((v >> 8) & 0xFF), (std::uint8_t)(v & 0xFF), 255};
+}
+
+inline bool pcdCoordinate(const char* p, const PcdField& f, float& out)
+{
+    if (f.size == 4) out = load<float>(p);
+    else out = (float)load<double>(p);
+    return true;
+}
+
+// Reads PCD files (DATA ascii, binary or binary_compressed) with x/y/z as float or double and
+// optionally a packed rgb/rgba field, with progress. Returns false for anything else (PCL).
+bool readPcd(const std::string& filename, CloudData& d, LoadProgress& progress)
+{
+    std::ifstream in(filename, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("could not read " + filename);
+
+    std::vector<PcdField> fields;
+    std::size_t width = 0, height = 1, points = 0;
+    std::string data, line;
+    auto words = [](std::istringstream& ls){ std::vector<std::string> w; std::string s; while (ls >> s) w.push_back(s); return w; };
+    while (std::getline(in, line)){
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream ls(line);
+        std::string key;
+        ls >> key;
+        std::vector<std::string> w = words(ls);
+        if (key == "FIELDS" || key == "COLUMNS"){
+            fields.assign(w.size(), PcdField());
+            for (std::size_t i = 0; i < w.size(); i++) fields[i].name = w[i];
+        }
+        else if (key == "SIZE" || key == "TYPE" || key == "COUNT"){
+            if (w.size() != fields.size()) return false;
+            for (std::size_t i = 0; i < w.size(); i++){
+                if (key == "SIZE") fields[i].size = (std::size_t)std::stoul(w[i]);
+                else if (key == "TYPE") fields[i].type = w[i].empty() ? '?' : w[i][0];
+                else fields[i].count = (std::size_t)std::stoul(w[i]);
+            }
+        }
+        else if (key == "WIDTH" && !w.empty()) width = (std::size_t)std::stoull(w[0]);
+        else if (key == "HEIGHT" && !w.empty()) height = (std::size_t)std::stoull(w[0]);
+        else if (key == "POINTS" && !w.empty()) points = (std::size_t)std::stoull(w[0]);
+        else if (key == "DATA"){
+            data = w.empty() ? "" : w[0];
+            break;
+        }
+    }
+    if (!in || fields.empty())
+        return false;
+    if (points == 0) points = width * height;
+
+    // layout of one point (binary / ascii) and the fields we need
+    std::size_t stride = 0, index = 0;
+    const PcdField* xyz[3] = {nullptr, nullptr, nullptr};
+    const PcdField* rgb = nullptr;
+    for (auto& f : fields){
+        f.offset = stride;
+        f.index = index;
+        stride += f.size * f.count;
+        index += f.count;
+    }
+    for (const auto& f : fields){
+        bool coord = f.type == 'F' && (f.size == 4 || f.size == 8) && f.count == 1;
+        if (f.name == "x" && coord) xyz[0] = &f;
+        else if (f.name == "y" && coord) xyz[1] = &f;
+        else if (f.name == "z" && coord) xyz[2] = &f;
+        else if ((f.name == "rgb" || f.name == "rgba") && f.size == 4 && f.count == 1) rgb = &f;
+    }
+    if (!xyz[0] || !xyz[1] || !xyz[2] || stride == 0)
+        return false;
+    if (data != "ascii" && data != "binary" && data != "binary_compressed")
+        return false;
+
+    d.positions.reserve(points);
+    if (rgb) d.colors.reserve(points);
+    auto add = [&](const glm::vec3& p, std::uint32_t color){
+        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
+            return;
+        addPoint(d, p);
+        if (rgb) d.colors.push_back(unpackPclColor(color));
+    };
+
+    if (data == "binary"){
+        const std::size_t batch = std::max<std::size_t>(1, (16u << 20) / stride);   // ~16 MB per read
+        std::vector<char> buffer(batch * stride);
+        for (std::size_t done = 0; done < points; ){
+            checkCancel(progress);
+            std::size_t n = std::min(batch, points - done);
+            in.read(buffer.data(), (std::streamsize)(n * stride));
+            if ((std::size_t)in.gcount() != n * stride)
+                throw std::runtime_error("file is truncated: " + filename);
+            for (std::size_t i = 0; i < n; i++){
+                const char* rec = buffer.data() + i * stride;
+                glm::vec3 p;
+                for (int a = 0; a < 3; a++) pcdCoordinate(rec + xyz[a]->offset, *xyz[a], p[a]);
+                add(p, rgb ? load<std::uint32_t>(rec + rgb->offset) : 0u);
+            }
+            done += n;
+            progress.fraction = (float)done / (float)points;
+        }
+    }
+    else if (data == "binary_compressed"){
+        // [uint32 compressed size][uint32 uncompressed size][LZF data]; decompressed, the
+        // fields are stored one after the other (all x, then all y, ...)
+        std::uint32_t sizes[2];
+        in.read((char*)sizes, sizeof(sizes));
+        if (!in) throw std::runtime_error("file is truncated: " + filename);
+        std::vector<std::uint8_t> packed(sizes[0]);
+        const std::size_t step = 16u << 20;
+        for (std::size_t done = 0; done < packed.size(); ){
+            checkCancel(progress);
+            std::size_t n = std::min(step, packed.size() - done);
+            in.read((char*)packed.data() + done, (std::streamsize)n);
+            if ((std::size_t)in.gcount() != n) throw std::runtime_error("file is truncated: " + filename);
+            done += n;
+            progress.fraction = 0.5f * (float)done / (float)packed.size();
+        }
+        progress.stage = "Decompressing";
+        std::vector<std::uint8_t> raw(sizes[1]);
+        if (sizes[1] < stride * points || lzfDecompress(packed.data(), packed.size(), raw.data(), raw.size()) != raw.size())
+            throw std::runtime_error("corrupt compressed data: " + filename);
+        packed = std::vector<std::uint8_t>();
+        progress.stage = "Reading";
+        auto column = [&](const PcdField* f){ return (const char*)raw.data() + f->offset * points; };
+        const char* cx = column(xyz[0]);
+        const char* cy = column(xyz[1]);
+        const char* cz = column(xyz[2]);
+        const char* cc = rgb ? column(rgb) : nullptr;
+        for (std::size_t i = 0; i < points; i++){
+            if ((i & 0xFFFFF) == 0){
+                checkCancel(progress);
+                progress.fraction = 0.5f + 0.5f * (float)i / (float)points;
+            }
+            glm::vec3 p;
+            pcdCoordinate(cx + i * xyz[0]->size, *xyz[0], p.x);
+            pcdCoordinate(cy + i * xyz[1]->size, *xyz[1], p.y);
+            pcdCoordinate(cz + i * xyz[2]->size, *xyz[2], p.z);
+            add(p, cc ? load<std::uint32_t>(cc + i * 4) : 0u);
+        }
+    }
+    else {   // ascii: one point per line, the values of all fields separated by spaces
+        std::error_code ec;
+        double fileSize = (double)std::filesystem::file_size(filename, ec);
+        std::size_t wanted[4] = {xyz[0]->index, xyz[1]->index, xyz[2]->index, rgb ? rgb->index : (std::size_t)-1};
+        std::size_t lastIndex = std::max({wanted[0], wanted[1], wanted[2], rgb ? wanted[3] : 0});
+        for (std::size_t n = 0; n < points && std::getline(in, line); n++){
+            if ((n & 0xFFFF) == 0){
+                checkCancel(progress);
+                if (fileSize > 0) progress.fraction = (float)((double)in.tellg() / fileSize);
+            }
+            const char* s = line.data();
+            const char* e = s + line.size();
+            float coord[3] = {NAN, NAN, NAN};
+            std::uint32_t color = 0;
+            for (std::size_t v = 0; v <= lastIndex && s < e; v++){
+                while (s < e && (*s == ' ' || *s == '\t')) ++s;
+                const char* tokEnd = s;
+                while (tokEnd < e && *tokEnd != ' ' && *tokEnd != '\t' && *tokEnd != '\r') ++tokEnd;
+                for (int a = 0; a < 3; a++)
+                    if (v == wanted[a]) std::from_chars(s, tokEnd, coord[a]);
+                if (rgb && v == wanted[3]){
+                    // PCL writes rgb as an integer (current versions) or as the float with
+                    // the same bits (older ones): integer if the whole token is one
+                    std::uint64_t u = 0;
+                    auto [end, err] = std::from_chars(s, tokEnd, u);
+                    if (err == std::errc() && end == tokEnd)
+                        color = (std::uint32_t)u;
+                    else {
+                        float f = 0.0f;
+                        std::from_chars(s, tokEnd, f);
+                        std::memcpy(&color, &f, 4);
+                    }
+                }
+                s = tokEnd;
+            }
+            add(glm::vec3(coord[0], coord[1], coord[2]), color);
+        }
+    }
+    return true;
+}
+
 // ---------------------------------------------------------------- OBJ (vertices only)
 
 // Reads the vertices ("v x y z [r g b]") of a Wavefront OBJ file as points; faces, normals
@@ -485,7 +710,8 @@ CloudData loadCloudData(const std::string& filename, LoadProgress& progress)
     if (ext == ".obj")
         readObj(filename, d, progress);
     else if (ext == ".ply" || ext == ".pcd"){
-        if (ext != ".ply" || !readPlyBinary(filename, d, progress)){
+        bool done = ext == ".ply" ? readPlyBinary(filename, d, progress) : readPcd(filename, d, progress);
+        if (!done){
             d = CloudData();
             d.min = glm::vec3(INFINITY);
             d.max = glm::vec3(-INFINITY);

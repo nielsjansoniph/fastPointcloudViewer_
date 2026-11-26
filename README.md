@@ -41,9 +41,9 @@ einkompilierten Projektpfad (`shaders/`, abweichend per Umgebungsvariable `FPCV_
 ./build/linux/fpcv --help
 ```
 
-Große Dateien werden im Hintergrund geladen; ein Fenster zeigt den Fortschritt (bei binären
-`.ply` und `.obj` in Prozent, bei `.pcd` und ASCII-`.ply` nur als laufender Balken) und kann
-das Laden abbrechen. Mehrere Dateien werden nacheinander geladen.
+Große Dateien werden im Hintergrund geladen; ein Fenster zeigt den Fortschritt (in Prozent; nur
+bei ASCII-`.ply` und ungewöhnlichen Formaten, die PCL liest, als laufender Balken) und kann das
+Laden abbrechen. Mehrere Dateien werden nacheinander geladen.
 
 Auf Laptops mit zwei Grafikkarten (NVIDIA Optimus/PRIME) nutzt das Programm automatisch die
 NVIDIA-Karte – der Unterschied ist groß (102 Mio. Punkte: 2,4 statt 35 Bilder/s ohne LOD). Die
