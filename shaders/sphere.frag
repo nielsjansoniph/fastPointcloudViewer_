@@ -7,45 +7,20 @@ out vec4 FragColor;
 flat in vec3 sphereCenter;
 
 #include "common.glsl"
-
-uniform mat4 camMatrix;
-uniform mat4 invCamMatrix;
-uniform vec2 viewportSize;
-uniform float sphereSize = 0.05;
+#include "sphere.glsl"
 
 void main()
 {
-	// Ray from the camera through this pixel
-	vec2 ndc = gl_FragCoord.xy / viewportSize * 2.0 - 1.0;
-	vec4 farPoint = invCamMatrix * vec4(ndc, 1.0, 1.0);
-	vec3 ro = cameraPosition;
-	vec3 rd = normalize(farPoint.xyz / farPoint.w - ro);
-
-	// Ray-sphere intersection
-	float r = 0.5 * sphereSize;
-	vec3 oc = ro - sphereCenter;
-	float b = dot(oc, rd);
-	float c = dot(oc, oc) - r * r;
-	float h = b * b - c;
-	if (h < 0.0)
-		discard;               // missed
-	float t = -b - sqrt(h);
-	if (t <= 0.0)
-		discard;               // camera inside the sphere or sphere behind it
-
-	vec3 hit = ro + t * rd;
-	vec3 nor = (hit - sphereCenter) / r;
+	vec3 nor, rd;
+	float depth;
+	if (!raycastSphere(sphereCenter, nor, rd, depth))
+		discard;
 
 	// Blend the six axis colors by the squared normal components (sum to 1)
 	vec3 n2 = nor * nor;
 	vec3 col = n2.x * (nor.x > 0.0 ? vec3(0.90, 0.20, 0.20) : vec3(0.20, 0.80, 0.80))
 	         + n2.y * (nor.y > 0.0 ? vec3(0.25, 0.85, 0.25) : vec3(0.80, 0.25, 0.80))
 	         + n2.z * (nor.z > 0.0 ? vec3(0.30, 0.50, 1.00) : vec3(0.95, 0.85, 0.20));
-
-	// Depth of the hit point instead of the sprite center
-	vec4 clip = camMatrix * vec4(hit, 1.0);
-	float depth = clip.z / clip.w * 0.5 + 0.5;
-	gl_FragDepth = depth;
 
 	float brightness = 1.0 - logisticDepth(depth) * useDepthOnPointBrightness;
 	FragColor = vec4(col * brightness, 1.0);

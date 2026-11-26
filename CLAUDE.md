@@ -74,15 +74,17 @@ cmake --build build/linux -j
 | 5 | zMap | `points.vert` + `zmap.frag` | Farbe nach Höhe **z** |
 | 6 | Sphere | `sphere.vert` + `sphere.frag` | Raycast Kugel |
 | 7 | RGB | `rgb.vert` + `rgb.frag` | Farben aus der Datei, Standard für Wolken mit Farben (`kColorPointShader`) |
+| 8 | RGB Sphere | `sphere.vert` + `rgbsphere.frag` | Raycast Kugel in Dateifarben, Licht von der Kamera bei „Use shadow“ |
 | – | Achsen | `axis.vert` + `axis.frag` | Koordinatenkreuz |
 
 - `common.glsl`: gemeinsame Uniforms (`near`, `far`, `useDepthOn…`, `useShadow`, `cameraPosition`)
   und Funktionen (`linearizeDepth`, `logisticDepth`, `hsv2rgb`, `map`, `spriteHeight`). Diese Uniforms
   daher **nicht** nochmal im Fragment-Shader deklarieren.
 - `points.vert` hat `uniform mat4 model` (Modellrotation); `pointPosition` ist in Weltkoordinaten.
-- Cube/Sphere (`programPointSize = true`): Vertex-Shader setzt `gl_PointSize` aus Weltgröße
+- Cube/Sphere/RGB Sphere (`programPointSize = true`): Vertex-Shader setzt `gl_PointSize` aus Weltgröße
   (= PointSize in cm) und Entfernung; Fragment-Shader schneidet den Sichtstrahl analytisch
-  (`invCamMatrix`, `viewportSize`) und schreibt `gl_FragDepth`.
+  (`invCamMatrix`, `viewportSize`) und schreibt `gl_FragDepth`. Der Kugelschnitt steckt in
+  `sphere.glsl` (`raycastSphere`), gemeinsam für Sphere und RGB Sphere.
 - Projektion fest `45°, 0.1, 500` (`Viewer.cpp`); die Regler Near/Far steuern **nur** die
   Helligkeitsabnahme in den Fragment-Shadern.
 
@@ -118,7 +120,6 @@ Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Videoaufnahme**: früher ~3 Bilder/s auf dem NTFS/OneDrive-Laufwerk. Gemessen 2026-11-26 auf ext4
   (1600×900, Halle1_V3.obj): glReadPixels 5,3 ms, flip 0,4 ms, MJPG-Schreiben 6,4 ms, ~80 Bilder/s.
   Ursache war also vermutlich das Laufwerk (oder ntfs-3g). Unter Windows nicht gemessen.
-- **Optional**: echte Raycast-Kugeln mit den Farben aus der Datei (wie Sphere, aber RGB).
 - Kamerafahrt bewegt sich 0,1 m bzw. 2° pro Bild (im Video 25 Bilder/s korrekt, live bildratenabhängig).
 
 ## Arbeitsweise mit dem Nutzer

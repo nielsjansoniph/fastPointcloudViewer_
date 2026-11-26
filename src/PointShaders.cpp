@@ -143,5 +143,16 @@ std::vector<PointShader> createPointShaders()
         [](const Shader&, const Cloud&, const ShaderSettings&, const RenderContext&){
         }});
 
+    // 8: ray-cast spheres in the colors from the file
+    shaders.push_back({"RGB Sphere", load("sphere.vert", "rgbsphere.frag"), true,
+        [](Cloud& c, ShaderSettings&, const glm::mat4&){
+            if (!c.hasColor)
+                ImGui::TextDisabled("File has no colors - shown white");
+            ImGui::TextDisabled("Sphere diameter = PointSize in cm, shading: \"Use shadow\"");
+        },
+        [](const Shader& s, const Cloud& c, const ShaderSettings&, const RenderContext& ctx){
+            setRaycastUniforms(s, "sphereSize", c, ctx);
+        }});
+
     return shaders;
 }
