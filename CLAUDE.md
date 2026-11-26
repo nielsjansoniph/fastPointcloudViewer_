@@ -47,7 +47,7 @@ cmake --build build/linux -j
 | `main.cpp` | Kommandozeile, GLFW/glad/ImGui-Init, Hauptschleife (`viewer.frame()`, `afterRender()`, Swap) |
 | `Viewer.*` | Anwendung: besitzt Kamera, Wolken, Shader-Tabelle, Achsen, Kamerafahrt, Modellrotation; Menü, Eingabe, Rendering |
 | `PointShaders.*` | **Tabelle aller Punkt-Shader**: Name, Shader-Dateien, Menü-Optionen, Uniforms. Neuer Shader = ein Eintrag in `createPointShaders()` |
-| `CameraPath.*` | Wegpunkte, Interpolation (Strecke + Winkel), Replay, Videoaufnahme (OpenCV, MJPG) |
+| `CameraPath.*` | Wegpunkte, Interpolation (0,1 m bzw. 2° pro Schritt), Replay, Videoaufnahme (OpenCV, MJPG). Aufnahme: 1 Schritt = 1 Videobild (25 Bilder/s); live: `replayPos += DeltaTime × 25`, Pose zwischen zwei Schritten interpoliert → gleiches Tempo wie im Video |
 | `Axes.*` | Koordinatenkreuz + Beschriftung (ImGui-ForegroundDrawList) |
 | `Camera.*` | Position/Orientierung, **Z ist oben**, WASD/RF in m/s × Frame-Zeit, Maus-/Pfeiltastenrotation, setzt gemeinsame Uniforms (`Camera::Matrix`) |
 | `Cloud.*` | .obj: eigener Leser (`readObj`, nur `v x y z [r g b]`-Zeilen, Farben 0..1 oder 0..255, locale-unabhängig per `from_chars`, dreht Y-oben → Z-oben: (x, y, z) → (x, −z, y)). Lädt .ply/.pcd über PCL (wirft `std::runtime_error`): einmal als `PCLPointCloud2` lesen, bei Feld `rgb`/`rgba` → `PointXYZRGBA`, sonst `PointXYZ`. GPU: Positionen 12 Byte/Punkt (Attribut 0), Farben 4 Byte/Punkt (Attribut 1, nur bei `hasColor`), keine Punktdaten im RAM; Bounding Box, `shaderType` (Index in die Shader-Tabelle), `pointssize`, `point_color` |
@@ -120,7 +120,6 @@ Mit dem Nutzer besprochen, aber noch nicht entschieden bzw. umgesetzt:
 - **Videoaufnahme**: früher ~3 Bilder/s auf dem NTFS/OneDrive-Laufwerk. Gemessen 2026-11-26 auf ext4
   (1600×900, Halle1_V3.obj): glReadPixels 5,3 ms, flip 0,4 ms, MJPG-Schreiben 6,4 ms, ~80 Bilder/s.
   Ursache war also vermutlich das Laufwerk (oder ntfs-3g). Unter Windows nicht gemessen.
-- Kamerafahrt bewegt sich 0,1 m bzw. 2° pro Bild (im Video 25 Bilder/s korrekt, live bildratenabhängig).
 
 ## Arbeitsweise mit dem Nutzer
 

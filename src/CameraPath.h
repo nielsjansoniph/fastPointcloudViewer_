@@ -15,7 +15,7 @@ public:
     bool loop = true;                      // return to the first waypoint at the end
     bool record = false;                   // write the replay to a video in records/
 
-    bool isReplaying() const { return frameIndex >= 0; }
+    bool isReplaying() const { return replayPos >= 0.0; }
 
     // Appends the current camera pose unless it equals the last waypoint
     void addWaypointIfChanged(const Camera& camera);
@@ -28,7 +28,8 @@ public:
     void update(Camera& camera, int framebufferWidth, int framebufferHeight);
 
     // After the frame is rendered (before swapping buffers): records it and advances the replay
-    void afterRender();
+    // by one video frame (recording) or by deltaTime (live, same speed as in the video)
+    void afterRender(float deltaTime);
 
 private:
     enum class ReplayRequest { None, All, FromSelection, OneStep };
@@ -37,7 +38,9 @@ private:
 
     std::vector<glm::vec3> interpPositions;
     std::vector<glm::vec3> interpOrientations;
-    int frameIndex = -1;                   // -1: not replaying
+    // Position in interpPositions (fractional when replaying live): one step per video frame
+    // while recording, otherwise advanced by the frame time at the video frame rate.
+    double replayPos = -1.0;               // < 0: not replaying
 
     cv::VideoWriter writer;
     cv::Size recordSize;

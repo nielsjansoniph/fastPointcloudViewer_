@@ -20,14 +20,14 @@ public:
     // Needs a current OpenGL context and an initialized ImGui
     explicit Viewer(GLFWwindow* window);
 
-    // Loads a .ply/.pcd file; prints a message and returns false on failure
+    // Loads a .ply/.pcd/.obj file; prints a message and returns false on failure
     bool loadCloud(const std::string& path);
 
     // Processes input, draws the UI and renders one frame (without swapping buffers)
     void frame();
 
     // Recording/replay needs the frame captured before the buffer swap
-    void afterRender() { path.afterRender(); }
+    void afterRender() { path.afterRender(ImGui::GetIO().DeltaTime); }
 
 private:
     GLFWwindow* window;

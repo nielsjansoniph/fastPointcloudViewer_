@@ -112,12 +112,18 @@ void CameraPath::update(Camera& camera, int framebufferWidth, int framebufferHei
     request = ReplayRequest::None;
 
     if (isReplaying()){
-        camera.Position = interpPositions[frameIndex];
-        camera.Orientation = interpOrientations[frameIndex];
+        // blend between the two neighboring steps (live replay is between frames)
+        int last = (int)interpPositions.size() - 1;
+        int i = std::min((int)replayPos, last);
+        int j = std::min(i + 1, last);
+        float f = (float)(replayPos - i);
+        camera.Position = glm::mix(interpPositions[i], interpPositions[j], f);
+        glm::vec3 o = glm::mix(interpOrientations[i], interpOrientations[j], f);
+        camera.Orientation = glm::length(o) > 1e-4f ? glm::normalize(o) : interpOrientations[i];
     }
 }
 
-void CameraPath::afterRender()
+void CameraPath::afterRender(float deltaTime)
 {
     if (!isReplaying())
         return;
@@ -134,14 +140,21 @@ void CameraPath::afterRender()
         writer.write(flipped);
     }
 
-    frameIndex++;
-    if (frameIndex >= (int)interpPositions.size()){
-        frameIndex = -1;
+    // the last pose has been shown: done
+    double last = (double)(interpPositions.size() - 1);
+    if (replayPos >= last){
+        replayPos = -1.0;
         if (writer.isOpened()){
             writer.release();
             std::cout << "Recording finished" << std::endl;
         }
+        return;
     }
+    if (writer.isOpened())
+        replayPos += 1.0;                                   // every step becomes one video frame
+    else
+        replayPos += (double)deltaTime * kVideoFps;         // live: same speed as in the video
+    replayPos = std::min(replayPos, last);                  // always show the final pose
 }
 
 void CameraPath::startReplay(int first, int last, int framebufferWidth, int framebufferHeight)
@@ -157,7 +170,7 @@ void CameraPath::startReplay(int first, int last, int framebufferWidth, int fram
         interpPositions.push_back(positions[last]);
         interpOrientations.push_back(glm::normalize(orientations[last]));
     }
-    frameIndex = 0;
+    replayPos = 0.0;
 
     if (record)
         openVideo(framebufferWidth, framebufferHeight);

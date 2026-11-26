@@ -76,5 +76,6 @@ Die Tastatur wirkt nur, solange der Mauszeiger nicht über dem Menü steht.
   - *RGB*: Farben aus der Datei (falls vorhanden; solche Wolken starten automatisch damit), runde Punkte, mit „Use shadow“ kugelartig schattiert
   - *RGB Sphere*: echte Kugeln wie *Sphere*, aber in den Farben aus der Datei; „Use shadow“ schattiert mit Licht von der Kamera
 - **Replay / Wegpunkt-Tabelle**: aufgenommene Wegpunkte abfahren, optional als Schleife und als
-  Video aufzeichnen (MJPG-`.avi` mit 25 Bildern/s im Ordner `records/` des Projekts);
+  Video aufzeichnen (MJPG-`.avi` mit 25 Bildern/s im Ordner `records/` des Projekts). Die Fahrt
+  hat live dasselbe Tempo wie im Video (2,5 m/s bzw. 50°/s), unabhängig von der Bildrate;
   Wegpunkte auswählen, löschen, verschieben.
